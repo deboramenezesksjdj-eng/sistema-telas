@@ -18,8 +18,8 @@ function Preview({ html, className = '' }: { html: string; className?: string })
         sandbox="allow-scripts"
         scrolling="no"
         title="preview"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[300%] w-[178%] -translate-x-1/2 -translate-y-1/2 border-0"
-        style={{ transform: 'translate(-50%,-50%) scale(0.5625)' }}
+        className="absolute left-0 top-0 origin-top-left border-0"
+        style={{ width: 390, height: 700, transform: 'scale(0.35)' }}
       />
     </div>
   )
