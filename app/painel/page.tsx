@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { setCookie } from 'nookies'
 import { Monitor, Plus, Trash2, Globe, Power, RefreshCw, LayoutGrid, Pencil, X, Copy, Search } from 'lucide-react'
 import { SCREEN_TEMPLATES } from '@/lib/templates'
@@ -11,16 +11,37 @@ type Device = { device_id: string; screen_id: number | null; screen_active: bool
 const CATEGORIES = ['Todas', ...Array.from(new Set(SCREEN_TEMPLATES.map((t) => t.category || 'Outras')))]
 
 function Preview({ html, className = '' }: { html: string; className?: string }) {
+  const [w, setW] = useState(0)
+  const [h, setH] = useState(0)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => {
+      const r = el.getBoundingClientRect()
+      setW(r.width)
+      setH(r.height)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const scale = w ? w / 390 : 0
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-neutral-800 bg-black ${className}`}>
-      <iframe
-        srcDoc={html}
-        sandbox="allow-scripts"
-        scrolling="no"
-        title="preview"
-        className="absolute left-0 top-0 origin-top-left border-0"
-        style={{ width: 390, height: 700, transform: 'scale(0.35)' }}
-      />
+    <div ref={ref} className={`relative overflow-hidden rounded-xl border border-neutral-800 bg-black ${className}`}>
+      {w > 0 && (
+        <iframe
+          srcDoc={html}
+          sandbox="allow-scripts"
+          scrolling="no"
+          title="preview"
+          className="absolute left-0 top-0 origin-top-left border-0"
+          style={{ width: 390, height: 700, transform: `scale(${scale})` }}
+        />
+      )}
     </div>
   )
 }
