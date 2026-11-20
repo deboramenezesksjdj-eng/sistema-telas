@@ -1,26 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.75rem;
+  --background: oklch(16% 0.018 264);
+  --foreground: oklch(98% 0.003 247);
+  --card: oklch(21% 0.022 264);
+  --card-foreground: oklch(98% 0.003 247);
+  --primary: oklch(62% 0.21 275);
+  --primary-foreground: oklch(99% 0.005 250);
+  --secondary: oklch(27% 0.03 265);
+  --secondary-foreground: oklch(98% 0.003 247);
+  --muted: oklch(25% 0.025 265);
+  --muted-foreground: oklch(70% 0.03 257);
+  --accent: oklch(27% 0.03 265);
+  --accent-foreground: oklch(98% 0.003 247);
+  --destructive: oklch(65% 0.22 25);
+  --border: oklch(100% 0 0 / 0.08);
+  --input: oklch(100% 0 0 / 0.12);
+  --ring: oklch(62% 0.21 275);
+  --sidebar: oklch(18% 0.02 264);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --radius-xl: 0.75rem;
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
