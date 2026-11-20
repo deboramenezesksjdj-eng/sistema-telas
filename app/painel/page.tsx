@@ -132,7 +132,10 @@ export default function AdminPanel() {
     try {
       const res = await fetch('/api/categories', { cache: 'no-store' })
       const data = await res.json()
-      setCategories(data.categories || [])
+      const cats: Category[] = data.categories || []
+      setCategories(cats)
+      // Seleciona automaticamente uma categoria inicial (igual Joystick: nunca lista tudo misturado)
+      setCat((prev) => prev ?? (cats.length ? cats.find((c) => c.category === 'ANDROID')?.category ?? cats[0].category : null))
     } catch {}
   }, [])
 
