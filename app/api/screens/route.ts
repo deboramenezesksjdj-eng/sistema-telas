@@ -13,7 +13,9 @@ export async function GET(request: NextRequest) {
       const q = sp.get('q') || ''
       const page = Math.max(1, Number(sp.get('page') || 1))
       const perPage = 24
-      let query = supabase.from(SCREENS_TABLE).select('id, name, html, is_global, is_active, updated_at', { count: 'exact' })
+      // html completo só quando pedirem (h=1); lista padrão vem leve para não travar o painel
+      const withHtml = sp.get('h') === '1'
+      let query = supabase.from(SCREENS_TABLE).select(withHtml ? 'id, name, html, is_global, is_active, updated_at' : 'id, name, is_global, is_active, updated_at', { count: 'exact' })
       if (cat && cat !== 'Todas') query = query.ilike('name', `${cat} — %`)
       if (q) query = query.ilike('name', `%${q}%`)
       query = query.order('name').range((page - 1) * perPage, page * perPage - 1)
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [{ data: screens, error: e1 }, { data: devices, error: e2 }] = await Promise.all([
-      supabase.from(SCREENS_TABLE).select('*').order('id'),
+      supabase.from(SCREENS_TABLE).select('id, name, is_global, is_active, updated_at').order('id'),
       supabase.from(DEVICES_TABLE).select('*').order('last_seen', { ascending: false }),
     ])
     if (e1 || e2) throw e1 || e2

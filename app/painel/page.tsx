@@ -30,30 +30,57 @@ function catIcon(name: string) {
   return { Icon, bg: `rgba(${tints[h % tints.length]},0.145)`, color: tints[h % tints.length] }
 }
 
-function Preview({ html, title = 'preview' }: { html: string; title?: string }) {
+// Preview que busca o HTML sob demanda quando entra na viewport (lista vem sem html)
+function Preview({ screenId, fallbackHtml, title = 'preview' }: { screenId?: number; fallbackHtml?: string; title?: string }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.5)
+  const [visible, setVisible] = useState(false)
+  const [html, setHtml] = useState<string | undefined>(fallbackHtml)
 
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
-    const ro = new ResizeObserver(() => {
-      setScale(el.clientWidth / 390)
-    })
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / 390))
     ro.observe(el)
-    return () => ro.disconnect()
+    let io: IntersectionObserver | null = null
+    if ('IntersectionObserver' in window) {
+      io = new IntersectionObserver((entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisible(true)
+          io?.disconnect()
+        }
+      }, { rootMargin: '200px' })
+      io.observe(el)
+    } else setVisible(true)
+    return () => { ro.disconnect(); io?.disconnect() }
   }, [])
+
+  useEffect(() => {
+    if (!visible || html || !screenId) return
+    let alive = true
+    fetch(`/api/screens/${screenId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.html) setHtml(d.html) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [visible, html, screenId])
 
   return (
     <div ref={wrapRef} className="relative aspect-[9/16] w-full bg-black overflow-hidden">
-      <iframe
-        srcDoc={html}
-        sandbox="allow-scripts"
-        loading="lazy"
-        title={title}
-        className="absolute left-0 top-0 border-0 pointer-events-none"
-        style={{ width: 390, height: 693, transform: `scale(${scale})`, transformOrigin: 'top left' }}
-      />
+      {html ? (
+        <iframe
+          srcDoc={html}
+          sandbox="allow-scripts"
+          loading="lazy"
+          title={title}
+          className="absolute left-0 top-0 border-0 pointer-events-none"
+          style={{ width: 390, height: 693, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white/70" />
+        </div>
+      )}
     </div>
   )
 }
@@ -157,18 +184,28 @@ export default function AdminPanel() {
     load()
   }
 
+  const fetchHtml = async (id: number): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/screens/${id}`, { cache: 'no-store' })
+      if (!res.ok) return null
+      const d = await res.json()
+      return d.html || null
+    } catch { return null }
+  }
+
   const useModel = async (s: Screen) => {
+    let html = s.html ?? (await fetchHtml(s.id))
+    if (!html) return
     // Substitui o placeholder de duração antes de ativar (telas com timer configurável)
-    if (s.html.includes('__DURACAO__')) {
-      const html = s.html.replaceAll('__DURACAO__', String(duration))
+    if (html.includes('__DURACAO__')) {
+      html = html.replaceAll('__DURACAO__', String(duration))
       await fetch('/api/screens', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: s.id, html }),
       })
-      s = { ...s, html }
     }
-    makeGlobal(s)
+    makeGlobal({ ...s, html })
   }
 
   const createScreen = async () => {
@@ -445,7 +482,7 @@ Aproveite!`}
                   {active && (
                     <span className="inline-flex items-center rounded-md border border-transparent bg-primary text-primary-foreground px-2.5 py-0.5 text-xs font-semibold absolute top-3 right-3 z-10 shadow">ATIVO</span>
                   )}
-                  <Preview html={m.html.includes('__DURACAO__') ? m.html.replaceAll('__DURACAO__', String(duration)) : m.html} title={m.name} />
+                  <Preview screenId={m.id} title={m.name} />
                   <div className="p-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -493,7 +530,7 @@ Aproveite!`}
                     {active && (
                       <span className="inline-flex items-center rounded-md bg-primary text-primary-foreground px-2.5 py-0.5 text-xs font-semibold absolute top-3 right-3 z-10 shadow">ATIVO</span>
                     )}
-                    <Preview html={s.html} title={s.name} />
+                    <Preview screenId={s.id} fallbackHtml={s.html} title={s.name} />
                     <div className="p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -508,7 +545,7 @@ Aproveite!`}
                         <button onClick={() => makeGlobal(s)} className="inline-flex items-center justify-center gap-1.5 h-8 rounded-md bg-primary text-primary-foreground px-3 text-xs font-medium hover:bg-primary/90 shadow">
                           <Power className="h-3.5 w-3.5 mr-1" /> {active ? 'Ativa' : 'Ativar'}
                         </button>
-                        <button onClick={() => { setEditingId(s.id); setEditHtml(s.html) }} className="rounded-md border border-input bg-background h-8 text-xs hover:bg-accent transition-colors">
+                        <button onClick={async () => { const html = s.html ?? (await fetchHtml(s.id)); setEditingId(s.id); setEditHtml(html || '') }} className="rounded-md border border-input bg-background h-8 text-xs hover:bg-accent transition-colors">
                           Editar
                         </button>
                         <button onClick={() => deleteScreen(s.id)} className="rounded-md bg-destructive/20 text-red-400 h-8 px-3 text-xs font-medium hover:bg-destructive/30 transition-colors">
@@ -531,7 +568,7 @@ Aproveite!`}
                   <button onClick={() => setVerHtml(null)} className="rounded-md p-1.5 hover:bg-accent"><X className="h-4 w-4" /></button>
                 </div>
                 <div className="mx-auto w-[260px]">
-                  <Preview html={verHtml.html} title={verHtml.name} />
+                  <Preview screenId={verHtml.id} fallbackHtml={verHtml.html} title={verHtml.name} />
                 </div>
                 <button onClick={() => { useModel(verHtml); setVerHtml(null) }} className="mt-4 w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow">
                   Ativar esta tela
@@ -607,7 +644,7 @@ Aproveite!`}
               />
               <div>
                 <p className="mb-2 text-xs text-muted-foreground">Pré-visualização</p>
-                <Preview html={editHtml} />
+                <Preview fallbackHtml={editHtml} />
                 <button onClick={saveEdit} className="mt-3 w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow">
                   Salvar
                 </button>
