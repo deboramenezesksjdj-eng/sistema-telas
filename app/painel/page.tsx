@@ -31,15 +31,28 @@ function catIcon(name: string) {
 }
 
 function Preview({ html, title = 'preview' }: { html: string; title?: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(0.5)
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      setScale(el.clientWidth / 390)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   return (
-    <div className="relative aspect-[9/16] w-full bg-black overflow-hidden">
+    <div ref={wrapRef} className="relative aspect-[9/16] w-full bg-black overflow-hidden">
       <iframe
         srcDoc={html}
         sandbox="allow-scripts"
         loading="lazy"
-        className="absolute inset-0 w-full h-full pointer-events-none border-0"
         title={title}
-        style={{ width: '390px', height: '693px' }}
+        className="absolute left-0 top-0 border-0 pointer-events-none"
+        style={{ width: 390, height: 693, transform: `scale(${scale})`, transformOrigin: 'top left' }}
       />
     </div>
   )
@@ -139,12 +152,24 @@ export default function AdminPanel() {
     await fetch('/api/screens', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: globalScreen.id, isActive: !globalScreen.is_active }),
+      body: JSON.stringify({ id: globalScreen.id, isActive: false }),
     })
     load()
   }
 
-  const useModel = (s: Screen) => makeGlobal(s)
+  const useModel = async (s: Screen) => {
+    // Substitui o placeholder de duração antes de ativar (telas com timer configurável)
+    if (s.html.includes('__DURACAO__')) {
+      const html = s.html.replaceAll('__DURACAO__', String(duration))
+      await fetch('/api/screens', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: s.id, html }),
+      })
+      s = { ...s, html }
+    }
+    makeGlobal(s)
+  }
 
   const createScreen = async () => {
     if (!newName || !newHtml) return
