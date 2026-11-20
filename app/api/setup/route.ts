@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import dns from 'dns'
 
 // Setup automático: cria as tabelas (via SQL) e importa as telas do Joystick.
-// Protegido: só funciona se ?key= for igual ao ADMIN_PASSWORD.
+// Protegido: só funciona se ?key= for igual ao SETUP_KEY.
 import { getPool } from '@/lib/pg'
 
 export async function POST(request: NextRequest) {
   const pwd = process.env.ADMIN_PASSWORD || 'Admin01'
   if (new URL(request.url).searchParams.get('key') !== (process.env.SETUP_KEY || pwd)) {
     return NextResponse.json({ error: 'não autorizado' }, { status: 401 })
+  }
+
+  // diagnostico: ?diag=1 — só resolve o DNS do host db e testa TCP
+  if (new URL(request.url).searchParams.get('diag')) {
+    dns.setDefaultResultOrder('verbatim')
+    const lookup = await dns.promises.lookup('db.srcyncstaxiteikajcqc.supabase.co', { all: true }).then(a => a).catch((e: NodeJS.ErrnoException) => e.code || String(e))
+    return NextResponse.json({ lookup })
   }
 
   const pool = getPool()

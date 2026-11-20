@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, SCREENS_TABLE, DEVICES_TABLE } from '@/lib/db'
 
-// Lista telas e dispositivos (para o painel)
-export async function GET() {
+// Lista telas e dispositivos (para o painel).
+// GET ?list=1&cat=&q=&page= — paginação para os 1184 modelos
+export async function GET(request: NextRequest) {
   try {
+    const sp = new URL(request.url).searchParams
+    const list = sp.get('list')
+
+    if (list) {
+      const cat = sp.get('cat') || ''
+      const q = sp.get('q') || ''
+      const page = Math.max(1, Number(sp.get('page') || 1))
+      const perPage = 24
+      let query = supabase.from(SCREENS_TABLE).select('id, name, html, is_global, is_active, updated_at', { count: 'exact' })
+      if (cat && cat !== 'Todas') query = query.ilike('name', `${cat} — %`)
+      if (q) query = query.ilike('name', `%${q}%`)
+      query = query.order('name').range((page - 1) * perPage, page * perPage - 1)
+      const { data, count, error } = await query
+      if (error) throw error
+      return NextResponse.json({ screens: data, total: count, page, perPage })
+    }
+
     const [{ data: screens, error: e1 }, { data: devices, error: e2 }] = await Promise.all([
       supabase.from(SCREENS_TABLE).select('*').order('id'),
       supabase.from(DEVICES_TABLE).select('*').order('last_seen', { ascending: false }),
@@ -14,6 +32,11 @@ export async function GET() {
     console.error('Erro ao listar:', error)
     return NextResponse.json({ error: 'Erro ao listar' }, { status: 500 })
   }
+}
+
+// Contagens por categoria (para a sidebar)
+export async function HEAD() {
+  return NextResponse.json({})
 }
 
 // Criar tela
