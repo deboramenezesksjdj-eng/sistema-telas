@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { setCookie } from 'nookies'
-import { Monitor, Plus, Trash2, Globe, Power, RefreshCw, LayoutGrid, Pencil, X } from 'lucide-react'
+import { Monitor, Plus, Trash2, Globe, Power, RefreshCw, LayoutGrid, Pencil, X, Copy, Search } from 'lucide-react'
 import { SCREEN_TEMPLATES } from '@/lib/templates'
 
 type Screen = { id: number; name: string; html: string; is_global: boolean; is_active: boolean; updated_at: string }
@@ -35,6 +35,8 @@ export default function AdminPanel() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editHtml, setEditHtml] = useState('')
   const [cat, setCat] = useState('Todas')
+  const [search, setSearch] = useState('')
+  const [copied, setCopied] = useState(false)
   const [pwd, setPwd] = useState('')
   const [error, setError] = useState('')
   const [loggedIn, setLoggedIn] = useState(false)
@@ -140,9 +142,15 @@ export default function AdminPanel() {
     load()
   }
 
+  const copyScript = () => {
+    navigator.clipboard.writeText(`<script src="${location.origin}/api/public/joystick/SEU-CODIGO.js" async></script>`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const visibleTemplates = useMemo(
-    () => SCREEN_TEMPLATES.filter((t) => cat === 'Todas' || (t.category || 'Outras') === cat),
-    [cat]
+    () => SCREEN_TEMPLATES.filter((t) => (cat === 'Todas' || (t.category || 'Outras') === cat) && t.name.toLowerCase().includes(search.toLowerCase())),
+    [cat, search]
   )
 
   if (!loggedIn) {
@@ -218,11 +226,41 @@ export default function AdminPanel() {
             </div>
           ))}
         </div>
+        {/* Código mestre */}
+        <div className="mb-8 rounded-2xl border border-indigo-500/40 bg-indigo-950/20 p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs uppercase tracking-wider text-neutral-400">Código mestre — script de injeção</span>
+            <span className="flex items-center gap-1.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 px-3 py-0.5 text-xs font-semibold text-indigo-300">
+              <span className="size-1.5 rounded-full bg-indigo-400 animate-pulse" /> Tempo real · atualiza em ~1,5s
+            </span>
+          </div>
+          <div className="flex items-stretch gap-2">
+            <code className="flex-1 min-w-0 overflow-x-auto rounded-lg bg-neutral-950 border border-neutral-800 px-3 py-2.5 font-mono text-xs text-neutral-300 whitespace-nowrap">
+              &lt;script src=&quot;{typeof window !== 'undefined' ? location.origin : ''}/api/public/joystick/SEU-CODIGO.js&quot; async&gt;&lt;/script&gt;
+            </code>
+            <button onClick={copyScript} className="shrink-0 rounded-lg bg-indigo-600 px-4 text-xs font-semibold hover:bg-indigo-500 flex items-center gap-1.5">
+              <Copy className="size-3.5" /> {copied ? 'Copiado!' : 'Copiar'}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-neutral-500">Cole este script uma única vez no app/site do celular. A tela muda em tempo real conforme você ativa presets aqui no painel.</p>
+        </div>
+
         {/* Modelos */}
         <section className="mb-10">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-neutral-400">
-            <LayoutGrid className="size-4" /> Modelos prontos
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-neutral-400">
+              <LayoutGrid className="size-4" /> Modelos prontos
+            </h2>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-500" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar telas…"
+                className="w-56 rounded-lg border border-neutral-700 bg-neutral-900 py-1.5 pl-9 pr-3 text-xs outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
           <div className="mb-4 flex flex-wrap gap-2">
             {CATEGORIES.map((c) => (
               <button
@@ -314,7 +352,10 @@ export default function AdminPanel() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {screens.map((s) => (
-                <div key={s.id} className={`overflow-hidden rounded-2xl border ${s.is_global ? 'border-indigo-500 bg-indigo-950/30' : 'border-neutral-800 bg-neutral-900'}`}>
+                <div key={s.id} className={`overflow-hidden rounded-2xl border relative ${s.is_global ? 'border-indigo-500 bg-indigo-950/30 ring-1 ring-indigo-500/40' : 'border-neutral-800 bg-neutral-900'}`}>
+                  {s.is_global && (
+                    <span className="absolute top-3 right-3 z-10 rounded-full bg-indigo-600 px-2.5 py-0.5 text-[10px] font-bold text-white shadow">ATIVA AGORA</span>
+                  )}
                   <Preview html={s.html} className="aspect-[9/16] rounded-b-none" />
                   <div className="p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
