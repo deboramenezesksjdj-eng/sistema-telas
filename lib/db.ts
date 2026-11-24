@@ -13,3 +13,4 @@ export const supabase = createClient(supabaseUrl || 'http://localhost', supabase
 
 export const SCREENS_TABLE = 'screens'
 export const DEVICES_TABLE = 'devices'
+export const USERS_TABLE = 'users'

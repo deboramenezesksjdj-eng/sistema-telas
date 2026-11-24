@@ -16,11 +16,11 @@ export default function Home() {
             </span>
           </div>
           <nav className="flex items-center gap-3">
-            <Link href="/painel" className="hidden sm:inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm shadow-sm hover:bg-accent transition-colors">
-              Painel
+            <Link href="/cadastro" className="hidden sm:inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm shadow-sm hover:bg-accent transition-colors">
+              Criar conta
             </Link>
-            <Link href="/painel" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors">
-              Acessar
+            <Link href="/login" className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors">
+              Entrar
             </Link>
           </nav>
         </div>
@@ -40,8 +40,8 @@ export default function Home() {
             Block Screen troca a tela de um dispositivo Android à distância — verificação facial, atualização de sistema, bancos e muito mais. Um script, controle total pelo painel.
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
-            <Link href="/painel" className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 transition-colors">
-              Abrir o painel <ArrowRight className="ml-2 h-4 w-4" />
+            <Link href="/cadastro" className="inline-flex h-11 items-center rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 transition-colors">
+              Criar conta grátis <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </div>
         </div>

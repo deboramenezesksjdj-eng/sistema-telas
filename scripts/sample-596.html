@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MPA - Finalizando Processo</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background: transparent !important;
+    overflow: hidden;
+    font-family: 'Space Grotesk', sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* OVERLAY TRANSPARENTE */
+.overlay {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: transparent !important;
+    overflow: hidden;
+}
+
+/* CARD PRINCIPAL - TOTALMENTE TRANSPARENTE */
+.card {
+    position: relative;
+    z-index: 1;
+    width: 92%;
+    max-width: 390px;
+    text-align: center;
+    color: #fff;
+    padding: 30px 20px;
+    background: transparent; 
+    border: none; 
+    box-shadow: none; 
+    animation: floatCard 6s ease-in-out infinite;
+}
+
+@keyframes floatCard {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.logo {
+    width: 170px;
+    margin: 0 auto 35px;
+    display: block;
+    filter: drop-shadow(0 0 15px rgba(0, 180, 255, 0.3));
+}
+
+/* SPINNER DE CARREGAMENTO MINIMALISTA */
+.modern-spinner {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 24px;
+    border: 3px solid rgba(0, 180, 216, 0.15);
+    border-top-color: #00b4d8;
+    border-radius: 50%;
+    animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+    box-shadow: 0 0 15px rgba(0, 180, 216, 0.3);
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* TEXTOS COM SOMBRA REFORÇADA */
+.title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+
+.subtitle {
+    font-size: 14px;
+    line-height: 1.6;
+    opacity: 0.9;
+    margin-bottom: 28px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.highlight {
+    color: #00b4d8;
+    font-weight: 600;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+}
+
+.status {
+    font-size: 15px;
+    font-weight: 500;
+    min-height: 44px;
+    opacity: 0.95;
+    transition: 0.4s;
+    color: #90e0ef;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.fade {
+    opacity: 0;
+    transform: translateY(5px);
+}
+</style>
+</head>
+
+<body>
+
+<div class="overlay">
+    <div class="card">
+        <img class="logo" src="https://kzxjhxctcmualiaufkqx.supabase.co/storage/v1/object/public/joystick-logos/4decaa4e-c8bc-41ab-9761-c91e90b7ff34.webp" alt="Logo MPA">
+
+        <div class="modern-spinner"></div>
+
+        <div class="title">Finalizando...</div>
+
+        <div class="subtitle">
+            Sua solicitação está nas <span class="highlight">etapas finais</span> de processamento.<br>
+            Por favor, aguarde só mais um momento.
+        </div>
+
+        <div class="status" id="status"></div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // SISTEMA DE TEXTO DINÂMICO (GENÉRICO)
+    // ==========================================
+    const mensagens = [
+        "Sincronizando informações com o servidor...",
+        "Aplicando protocolos finais de segurança...",
+        "Verificando a integridade dos dados enviados...",
+        "Registrando protocolo no sistema...",
+        "Preparando a próxima etapa para você...",
+        "Quase lá. Não feche ou atualize esta página."
+    ];
+
+    const status = document.getElementById("status");
+    let i = 0;
+
+    status.innerHTML = mensagens[0];
+
+    setInterval(() => {
+        status.classList.add("fade");
+        setTimeout(() => {
+            i = (i + 1) % mensagens.length;
+            status.innerHTML = mensagens[i];
+            status.classList.remove("fade");
+        }, 400); 
+    }, 3500); 
+
+</script>
+
+</body>
+</html>

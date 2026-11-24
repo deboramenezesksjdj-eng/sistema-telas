@@ -1,0 +1,18 @@
+// Loga no painel, entra numa categoria e fotografa os previews
+const { chromium } = require('playwright')
+;(async () => {
+  const b = await chromium.launch()
+  const p = await b.newPage({ viewport: { width: 1400, height: 900 } })
+  await p.goto('https://sistema-telas.vercel.app/painel', { waitUntil: 'domcontentloaded' })
+  await p.fill('input[type=password]', process.env.ADMIN_PW)
+  await p.keyboard.press('Enter')
+  await p.waitForTimeout(6000)
+  await p.screenshot({ path: 'scripts/shot-1-inicial.png' })
+  // clicar na categoria 99PAY na sidebar (botão que contém "99PAY")
+  const btn = p.locator('button', { hasText: '99PAY' }).first()
+  if (await btn.count()) await btn.click()
+  await p.waitForTimeout(8000)
+  await p.screenshot({ path: 'scripts/shot-2-99pay.png' })
+  await b.close()
+  console.log('ok')
+})()
