@@ -2,31 +2,20 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  Plus, Search, Copy, X, Eye, Power, Lock, BookOpen, Link2,
-  EllipsisVertical, ArrowUpDown, ChevronDown, Layers, Building2,
-  Signal, Landmark, Smartphone, CircleDot, MonitorPlay, Smartphone as DeviceIcon,
+  Search, Copy, X, Eye, Power, LogOut,
+  ChevronLeft, ChevronRight, Smartphone, MonitorPlay, Shield, Radio,
 } from 'lucide-react'
 
 type Screen = { id: number; name: string; html: string; is_global: boolean; is_active: boolean; updated_at: string }
 type Device = { device_id: string; screen_id: number | null; screen_active: boolean; label: string | null; last_seen: string }
 type Category = { category: string; count: number }
 
-const CAT_COLORS = ['#22d3ee', '#6366f1', '#ffffff', '#f43f5e', '#2990ff', '#f59e0b', '#a78bfa', '#10b981', '#eab308', '#ec4899']
+const SEP = ' — '
 
-function dotColor(name: string) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
-  return CAT_COLORS[h % CAT_COLORS.length]
-}
-
-const CAT_ICONS = [Building2, Signal, Landmark, Smartphone, Layers]
-
-function catIcon(name: string) {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 17 + name.charCodeAt(i)) >>> 0
-  const Icon = CAT_ICONS[h % CAT_ICONS.length]
-  const tints = ['34,211,238', '99,102,241', '16,185,129', '245,158,11', '244,63,94']
-  return { Icon, bg: `rgba(${tints[h % tints.length]},0.145)`, color: tints[h % tints.length] }
+function splitName(name: string) {
+  const i = name.indexOf(SEP)
+  if (i === -1) return { cat: name, short: name }
+  return { cat: name.slice(0, i), short: name.slice(i + SEP.length) }
 }
 
 // Preview que busca o HTML sob demanda quando entra na viewport (lista vem sem html)
@@ -87,24 +76,26 @@ function Preview({ screenId, fallbackHtml, title = 'preview' }: { screenId?: num
 export default function AdminPanel() {
   const [screens, setScreens] = useState<Screen[]>([])
   const [devices, setDevices] = useState<Device[]>([])
-  const [newName, setNewName] = useState('')
-  const [newHtml, setNewHtml] = useState('')
   const [duration, setDuration] = useState(240)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editHtml, setEditHtml] = useState('')
-  const [cat, setCat] = useState<string | null>(null) // null = nenhuma engenharia selecionada
+  const [cat, setCat] = useState<string>('Todas')
   const [search, setSearch] = useState('')
   const [copied, setCopied] = useState(false)
-  const [me, setMe] = useState<{ email: string; name: string | null; role: string } | null>(null)
+  const [me, setMe] = useState<{ id: number; email: string; name: string | null; role: string } | null>(null)
   const [checking, setChecking] = useState(true)
   const [models, setModels] = useState<Screen[]>([])
   const [modelTotal, setModelTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [categories, setCategories] = useState<Category[]>([])
   const [verHtml, setVerHtml] = useState<Screen | null>(null)
+  const [novaOpen, setNovaOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newHtml, setNewHtml] = useState('')
   const perPage = 30
 
   const globalScreen = useMemo(() => screens.find((s) => s.is_global), [screens])
+  const masterToken = me ? `bs-${me.id}` : ''
 
   const load = useCallback(async () => {
     try {
@@ -116,9 +107,9 @@ export default function AdminPanel() {
     } catch {}
   }, [])
 
-  const loadModels = useCallback(async (c: string | null, q: string, p: number) => {
+  const loadModels = useCallback(async (c: string, q: string, p: number) => {
     try {
-      const res = await fetch(`/api/screens?list=1&cat=${encodeURIComponent(c || '')}&q=${encodeURIComponent(q)}&page=${p}`, { cache: 'no-store' })
+      const res = await fetch(`/api/screens?list=1&cat=${encodeURIComponent(c === 'Todas' ? '' : c)}&q=${encodeURIComponent(q)}&page=${p}`, { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
       setModels(data.screens || [])
@@ -130,10 +121,7 @@ export default function AdminPanel() {
     try {
       const res = await fetch('/api/categories', { cache: 'no-store' })
       const data = await res.json()
-      const cats: Category[] = data.categories || []
-      setCategories(cats)
-      // Seleciona automaticamente uma categoria inicial (igual Joystick: nunca lista tudo misturado)
-      setCat((prev) => prev ?? (cats.length ? cats.find((c) => c.category === 'ANDROID')?.category ?? cats[0].category : null))
+      setCategories(data.categories || [])
     } catch {}
   }, [])
 
@@ -196,7 +184,7 @@ export default function AdminPanel() {
   const useModel = async (s: Screen) => {
     let html = s.html ?? (await fetchHtml(s.id))
     if (!html) return
-    // Substitui o placeholder de duraÃ§Ã£o antes de ativar (telas com timer configurÃ¡vel)
+    // Substitui o placeholder de duração antes de ativar (telas com timer configurável)
     if (html.includes('__DURACAO__')) {
       html = html.replaceAll('__DURACAO__', String(duration))
       await fetch('/api/screens', {
@@ -217,6 +205,7 @@ export default function AdminPanel() {
     })
     setNewName('')
     setNewHtml('')
+    setNovaOpen(false)
     load()
     loadCategories()
   }
@@ -239,8 +228,10 @@ export default function AdminPanel() {
     loadCategories()
   }
 
+  const scriptTag = `<script src="${typeof window !== 'undefined' ? location.origin : ''}/api/public/joystick/${masterToken}.js" async></script>`
+
   const copyScript = () => {
-    navigator.clipboard.writeText(`<script src="${location.origin}/api/public/joystick/SEU-CODIGO.js" async></script>`)
+    navigator.clipboard.writeText(scriptTag)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -251,394 +242,313 @@ export default function AdminPanel() {
   }
 
   const totalPages = Math.max(1, Math.ceil(modelTotal / perPage))
-  const selCat = categories.find((c) => c.category === cat)
 
   if (checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-foreground" />
+      <div className="flex min-h-screen items-center justify-center bg-[#08080d] text-zinc-500">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-emerald-400" />
       </div>
     )
   }
 
+  const masterCode = `<script src="${typeof window !== 'undefined' ? location.origin : ''}/api/public/joystick/${masterToken}.js" async></script>`
+
   return (
-    <div className="min-h-screen flex bg-background text-foreground">
-      {/* ============ SIDEBAR ============ */}
-      <aside className="w-72 shrink-0 border-r border-border/50 bg-card/30 hidden lg:flex flex-col sticky top-0 h-screen overflow-y-auto">
-        {/* Logo */}
-        <div className="p-4 flex items-center justify-center border-b border-border/50">
+    <div className="min-h-screen bg-[#08080d] text-zinc-100">
+      {/* ===== BARRA SUPERIOR (layout próprio, sem sidebar) ===== */}
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-[#08080d]/95 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
           <div className="flex items-center gap-2.5">
-            <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center drop-shadow-[0_0_20px_rgba(168,85,247,0.35)]">
-              <MonitorPlay className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-600/25">
+              <MonitorPlay className="h-4 w-4 text-white" />
             </div>
-            <span className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">BLOCK SCREEN</span>
+            <div className="leading-tight">
+              <div className="text-sm font-extrabold tracking-tight text-white">BLOCK SCREEN</div>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500">controle de telas</div>
+            </div>
           </div>
-        </div>
 
-        {/* UsuÃ¡rio logado + sair */}
-        <div className="p-3 pb-0 space-y-2">
-          <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-              {(me?.name || me?.email || '?').slice(0, 1).toUpperCase()}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold">{me?.name || 'UsuÃ¡rio'}</div>
-              <div className="truncate text-[10px] text-muted-foreground">{me?.email}</div>
-            </div>
+          {/* busca no topo */}
+          <div className="relative ml-auto hidden w-72 md:block">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="h-9 w-full rounded-xl border border-white/10 bg-black/40 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60"
+              placeholder="Buscar tela..."
+            />
+          </div>
+
+          {/* dispositivos */}
+          <div className="hidden items-center gap-1.5 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-400 sm:flex">
+            <Smartphone className="h-3.5 w-3.5 text-emerald-400" />
+            {devices.filter((d) => Date.now() - new Date(d.last_seen).getTime() < 120000).length} online
+            <span className="text-zinc-600">/ {devices.length}</span>
+          </div>
+
+          {/* usuário */}
+          <div className="flex items-center gap-2">
             {me?.role === 'admin' && (
-              <a href="/admin" className="shrink-0 rounded-md border border-primary/40 px-2 py-1 text-[10px] font-bold text-primary hover:bg-primary/10">ADMIN</a>
+              <a href="/admin" className="hidden items-center gap-1.5 rounded-xl border border-violet-500/40 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/10 sm:flex">
+                <Shield className="h-3.5 w-3.5" /> Admin
+              </a>
             )}
+            <span className="hidden text-xs text-zinc-400 lg:inline">{me?.name || me?.email}</span>
+            <button onClick={logout} title="Sair" className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white">
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
-          <button onClick={logout} className="inline-flex items-center justify-center gap-2 h-8 rounded-md px-3 text-xs w-full border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-            Sair da conta
-          </button>
         </div>
 
-        {/* Dispositivos conectados */}
-        <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-300/80">Dispositivos ({devices.length})</div>
-        <div className="px-2 space-y-1 max-h-[40vh] overflow-y-auto">
-          {devices.length === 0 ? (
-            <div className="px-2.5 py-2 text-xs text-muted-foreground italic">Nenhum dispositivo conectado ainda.</div>
-          ) : (
-            devices.map((d) => {
-              const on = Date.now() - new Date(d.last_seen).getTime() < 120000
-              return (
-                <div key={d.device_id} className="group flex items-center gap-2 rounded-md px-2.5 py-2 cursor-pointer text-sm bg-cyan-500/10 text-foreground ring-1 ring-cyan-500/30">
-                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${on ? 'bg-cyan-400' : 'bg-muted-foreground'}`} />
-                  <span className="flex-1 truncate">{d.label || d.device_id}</span>
-                  <Link2 className="h-3 w-3 opacity-60" />
-                  {on && <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />}
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        {/* Categorias */}
-        <div className="p-3 pt-4 border-t border-border/50 mt-2 space-y-2">
-          <div className="px-3 pt-2 pb-1 -mx-3 text-[10px] font-semibold uppercase tracking-wider text-cyan-300/80">Categorias</div>
-          <nav className="space-y-1.5">
-            <div className="rounded-lg border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 to-transparent overflow-hidden">
-              <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-cyan-400/20">
-                <Eye className="h-3.5 w-3.5 text-cyan-300" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-cyan-200/90 flex-1">Telas ON</span>
-                <span className="text-[10px] tabular-nums text-cyan-200/70 bg-cyan-400/15 rounded-full px-1.5 py-0.5">{globalScreen?.is_active ? 1 : 0}</span>
-              </div>
-              <div className="px-1.5 py-1 space-y-0.5 max-h-56 overflow-y-auto">
-                {globalScreen ? (
-                  <div className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer text-sm ${globalScreen.is_active ? 'bg-cyan-500/20 text-foreground ring-1 ring-cyan-400/40' : 'hover:bg-cyan-400/10 text-cyan-100/90'}`}>
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: dotColor(globalScreen.name.split(' â€” ')[0]) }} />
-                    <span className="flex-1 truncate">{globalScreen.name}</span>
-                    <span className="text-[10px] tabular-nums text-cyan-200/80 bg-cyan-400/15 rounded-full px-1.5 py-0.5 shrink-0">global</span>
-                  </div>
-                ) : (
-                  <div className="px-2 py-1.5 text-xs text-muted-foreground italic">Nenhuma tela ativa</div>
-                )}
-              </div>
-            </div>
-          </nav>
-          {/* Lista de engenharias (categorias) */}
-          <nav className="flex-1 overflow-y-auto px-0.5 pb-2 space-y-1.5 max-h-[50vh]">
-            {categories.map((c) => {
-              const ic = catIcon(c.category)
-              const active = cat === c.category
-              return (
-                <button
-                  key={c.category}
-                  onClick={() => { setCat(active ? null : c.category); setPage(1) }}
-                  className={`min-w-0 w-full flex flex-col gap-0.5 px-2.5 py-2 rounded-lg overflow-hidden border bg-gradient-to-br from-card/40 to-transparent transition-colors ${active ? 'border-cyan-400/60 ring-1 ring-cyan-400/40 bg-cyan-500/10' : 'border-border/40 hover:bg-cyan-500/5'}`}
-                >
-                  <div className="grid min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 shadow-sm" style={{ background: `rgba(${ic.color.replace(/ /g, ',')},0.145)`, color: `rgb(${ic.color})` }}>
-                        <ic.Icon className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="min-w-0 flex-1 text-left text-sm font-semibold truncate">{c.category}</span>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <span className="text-[10px] tabular-nums text-muted-foreground bg-muted/40 rounded-full px-1.5 py-0.5">{c.count} telas</span>
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                  </div>
-                </button>
-              )
-            })}
-          </nav>
-        </div>
-      </aside>
-
-      {/* ============ MAIN ============ */}
-      <main className="flex-1 min-w-0 overflow-y-auto max-h-screen">
-        <div className="p-6 space-y-5 max-w-[1600px] mx-auto">
-          {/* Bloco tutorial */}
-          <div className="rounded-xl border border-primary/40 bg-primary/5 p-5 relative">
-            <h2 className="font-semibold flex items-center gap-2 mb-2">
-              <BookOpen className="h-4 w-4 text-primary" /> Seu espaÃ§o pessoal
-            </h2>
-            <p className="text-sm text-muted-foreground whitespace-pre-line">
-              {`As categorias e engenharias oficiais sÃ£o sÃ³ para uso.
-
-Crie suas prÃ³prias telas dentro de "Minhas telas".
-
-Aproveite!`}
-            </p>
+        {/* faixa de categorias (chips roláveis) */}
+        <div className="mx-auto max-w-7xl overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setCat('Todas'); setPage(1) }}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${cat === 'Todas' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/30' : 'border border-white/10 text-zinc-400 hover:border-white/25 hover:text-white'}`}
+            >
+              Todas
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.category}
+                onClick={() => { setCat(c.category); setPage(1) }}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${cat === c.category ? 'bg-emerald-500 text-white shadow shadow-emerald-500/30' : 'border border-white/10 text-zinc-400 hover:border-white/25 hover:text-white'}`}
+              >
+                {c.category} <span className="opacity-60">{c.count}</span>
+              </button>
+            ))}
           </div>
+        </div>
+      </header>
 
-          {/* Header Block Screen */}
-          <div className="rounded-xl border border-border/50 bg-gradient-to-br from-primary/10 to-transparent p-5 flex items-center gap-4">
-            <div className="h-14 w-14 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-              <Lock className="h-7 w-7 text-primary" />
+      <main className="mx-auto max-w-7xl px-4 pb-20 pt-6">
+        {/* ===== linha de status ===== */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-[#0e1512] to-[#0a0d14] p-5">
+          <div className="flex items-center gap-4">
+            <div className={`relative flex h-12 w-12 items-center justify-center rounded-2xl ${globalScreen?.is_active ? 'bg-emerald-500/15' : 'bg-white/5'}`}>
+              <Radio className={`h-5 w-5 ${globalScreen?.is_active ? 'text-emerald-400' : 'text-zinc-500'}`} />
+              {globalScreen?.is_active && <span className="absolute -right-0.5 -top-0.5 h-3 w-3 animate-pulse rounded-full bg-emerald-400 ring-2 ring-[#08080d]" />}
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Block Screen</h1>
-              <p className="text-sm text-muted-foreground">CatÃ¡logo de telas. Selecione uma categoria na lateral e ative o preset desejado de qualquer engenharia.</p>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Transmitindo agora</div>
+              <div className="font-bold text-white">
+                {globalScreen?.is_active ? globalScreen.name : 'Nenhuma tela ativa'}
+              </div>
             </div>
           </div>
-
-          {/* CÃ³digo mestre */}
-          <div data-tour="master-code" className="rounded-xl border border-border/50 bg-gradient-to-br from-card to-card/40 p-4 shadow">
-            <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">CÃ³digo mestre</span>
-                <span className="inline-flex items-center rounded-md border border-border px-2.5 py-0.5 text-xs font-medium">PAINEL</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary/15 text-primary px-2.5 py-0.5 text-xs font-semibold hover:bg-primary/20 shadow">
-                  <CircleDot className="h-3 w-3 mr-1 animate-pulse" />
-                  {globalScreen?.is_active ? `Ativo agora: ${globalScreen.name}` : 'Nada ativo'}
-                </span>
-                <button onClick={desativar} className="inline-flex items-center h-8 rounded-md px-3 text-xs hover:bg-accent transition-colors">
-                  Desativar tudo
-                </button>
-              </div>
-            </div>
-            <div className="flex items-stretch gap-2">
-              <code className="flex-1 min-w-0 rounded-md bg-muted/50 px-3 py-2 text-xs font-mono break-all">
-                &lt;script src=&quot;{typeof window !== 'undefined' ? location.origin : ''}/api/public/joystick/SEU-CODIGO.js&quot; async&gt;&lt;/script&gt;
-              </code>
-              <button onClick={copyScript} className="inline-flex items-center h-9 rounded-md bg-primary text-primary-foreground px-4 text-sm font-medium hover:bg-primary/90 shadow shrink-0 transition-colors">
-                <Copy className="h-4 w-4 mr-1.5" /> {copied ? 'Copiado!' : 'Copiar'}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-400">
+              Timer: <b className="text-emerald-400">{Math.floor(duration / 60)}min{duration % 60 ? ` ${duration % 60}s` : ''}</b>
+              <input type="range" min={30} max={1800} step={30} value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="ml-2 h-1 w-28 accent-emerald-500" />
+            </span>
+            {globalScreen && (
+              <button onClick={desativar} className="rounded-xl border border-red-500/40 px-4 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10">
+                Desligar
               </button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">Cole este script uma Ãºnica vez no site/app. Ele atualiza a tela em tempo real conforme vocÃª ativa/desativa um preset de qualquer engenharia.</p>
-          </div>
-
-          {/* Busca + Nova tela */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[260px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring pl-9"
-                placeholder="Buscar telas por nome ou descriÃ§Ã£oâ€¦"
-              />
-            </div>
-            <button
-              onClick={desativar}
-              className="inline-flex items-center h-9 rounded-md border border-input bg-background px-4 text-sm shadow-sm hover:bg-accent transition-colors"
-              title="Organizar telas"
-            >
-              <ArrowUpDown className="h-4 w-4 mr-1" /> Ordenar
-            </button>
-            <button
-              onClick={() => { setCat(null); setTimeout(() => document.getElementById('nova-tela')?.scrollIntoView({ behavior: 'smooth' }), 50) }}
-              className="inline-flex items-center h-9 rounded-md bg-primary text-primary-foreground px-4 text-sm font-medium hover:bg-primary/90 shadow"
-            >
-              <Plus className="h-4 w-4 mr-1" /> Nova tela
+            )}
+            <button onClick={() => setNovaOpen(true)} className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 hover:brightness-110">
+              + Nova tela
             </button>
           </div>
+        </div>
 
-          {/* Contagem + slider duraÃ§Ã£o */}
-          <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap">
-            <span>
-              <span className="font-semibold text-foreground">{modelTotal}</span> telas em <span className="text-foreground">{cat || 'todas as categorias'}</span>
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1 text-xs">
-              DuraÃ§Ã£o do timer (Android):
-              <b className="text-primary">{Math.floor(duration / 60)}min {duration % 60 ? `${duration % 60}s` : ''}</b>
-              <input type="range" min={30} max={1800} step={30} value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-32 h-1 accent-[var(--primary)]" />
-            </span>
+        {/* ===== código de instalação ===== */}
+        <div className="mb-8 rounded-2xl border border-white/10 bg-[#0c0c14] p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Código de instalação</h2>
+              <p className="text-xs text-zinc-500">Cole uma única vez no site/app. As telas trocam em tempo real quando você ativa outra — sem recarregar nada.</p>
+            </div>
+            <button onClick={copyScript} className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20">
+              <Copy className="h-3.5 w-3.5" /> {copied ? 'Copiado!' : 'Copiar código'}
+            </button>
           </div>
-
-          {/* Grid de presets */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
-            {models.map((m) => {
-              const catName = m.name.split(' â€” ')[0]
-              const shortName = m.name.split(' â€” ').slice(1).join(' â€” ') || m.name
-              const active = globalScreen?.id === m.id
-              return (
-                <div
-                  key={m.id}
-                  className={`rounded-xl border shadow relative overflow-hidden bg-card/40 transition hover:border-border ${active ? 'border-primary ring-1 ring-primary/40 shadow-[0_0_0_3px_rgba(99,102,241,0.08)]' : 'border-border/50'}`}
-                >
-                  {active && (
-                    <span className="inline-flex items-center rounded-md border border-transparent bg-primary text-primary-foreground px-2.5 py-0.5 text-xs font-semibold absolute top-3 right-3 z-10 shadow">ATIVO</span>
-                  )}
-                  <Preview screenId={m.id} title={m.name} />
-                  <div className="p-3 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">{shortName}</p>
-                        <p className="text-xs text-muted-foreground truncate">{catName}</p>
+          <code className="block overflow-x-auto rounded-xl bg-black/60 px-4 py-3 font-mono text-xs text-emerald-300/90">
+            {masterCode}
+          </code>
+          {devices.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Aparelhos conectados</div>
+              {devices.map((d) => {
+                const on = Date.now() - new Date(d.last_seen).getTime() < 120000
+                return (
+                  <div key={d.device_id} className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`h-2 w-2 rounded-full ${on ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
+                      <div>
+                        <span className="text-xs font-semibold text-white">{d.label || d.device_id}</span>
+                        <span className="ml-2 text-[10px] text-zinc-500">{new Date(d.last_seen).toLocaleString('pt-BR')}</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setVerHtml(m)} className="inline-flex items-center justify-center h-8 rounded-md border border-input bg-background px-3 text-xs shadow-sm hover:bg-accent transition-colors">
-                        <Eye className="h-3.5 w-3.5 mr-1" /> Ver
-                      </button>
-                      <button onClick={() => useModel(m)} className="inline-flex items-center justify-center gap-2 h-8 rounded-md bg-primary text-primary-foreground px-3 text-xs font-medium hover:bg-primary/90 shadow transition-colors">
-                        <Power className="h-3.5 w-3.5 mr-1" /> Ativar
-                      </button>
-                    </div>
+                    <select
+                      value={d.screen_id ?? 'global'}
+                      onChange={(e) => {
+                        const v = e.target.value === 'global' ? null : Number(e.target.value)
+                        fetch('/api/screens', {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ deviceId: d.device_id, screenId: v, active: true }),
+                        }).then(load)
+                      }}
+                      className="h-8 max-w-56 rounded-lg border border-white/10 bg-black/60 px-2 text-xs text-white outline-none focus:border-emerald-500/60"
+                    >
+                      <option value="global">Seguir tela global</option>
+                      {screens.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* PaginaÃ§Ã£o */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="h-8 rounded-md border border-input bg-background px-3 text-xs disabled:opacity-30 hover:bg-accent">
-                Anterior
-              </button>
-              <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{page}</span> / {totalPages} Â· {modelTotal} telas
-              </span>
-              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-30 hover:bg-accent">
-                PrÃ³xima
-              </button>
+                )
+              })}
             </div>
           )}
+        </div>
 
-          {/* Minhas telas */}
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground">Minhas telas <span className="text-muted-foreground/60">({screens.length})</span></h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+        {/* ===== catálogo ===== */}
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-bold text-white">
+            {cat === 'Todas' ? 'Todas as telas' : cat}
+            <span className="ml-2 text-xs font-medium text-zinc-500">{modelTotal} disponíveis</span>
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+          {models.map((m) => {
+            const { cat: catName, short: shortName } = splitName(m.name)
+            const active = globalScreen?.id === m.id
+            return (
+              <div
+                key={m.id}
+                className={`group relative overflow-hidden rounded-2xl border bg-[#0c0c14] transition ${active ? 'border-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.15)]' : 'border-white/10 hover:border-white/25'}`}
+              >
+                {active && (
+                  <span className="absolute left-3 top-3 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">NO AR</span>
+                )}
+                <Preview screenId={m.id} title={m.name} />
+                <div className="p-3">
+                  <p className="truncate text-xs font-semibold text-white">{shortName}</p>
+                  <p className="mb-2 truncate text-[10px] text-zinc-500">{catName}</p>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => setVerHtml(m)} className="flex h-8 flex-1 items-center justify-center rounded-lg border border-white/10 text-[11px] font-semibold text-zinc-300 hover:bg-white/5">
+                      <Eye className="mr-1 h-3 w-3" /> Ver
+                    </button>
+                    <button onClick={() => useModel(m)} className={`flex h-8 flex-1 items-center justify-center rounded-lg text-[11px] font-bold ${active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-500 text-white hover:bg-emerald-400'}`}>
+                      <Power className="mr-1 h-3 w-3" /> {active ? 'No ar' : 'Ativar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* paginação */}
+        {totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-zinc-400 disabled:opacity-30 hover:bg-white/5">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-xs text-zinc-500"><b className="text-white">{page}</b> de {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-zinc-400 disabled:opacity-30 hover:bg-white/5">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ===== minhas telas ===== */}
+        <section className="mt-10">
+          <h2 className="mb-3 text-base font-bold text-white">Minhas telas <span className="text-xs font-medium text-zinc-500">({screens.length})</span></h2>
+          {screens.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-sm text-zinc-500">
+              Você ainda não criou telas. Clique em "+ Nova tela" para começar.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
               {screens.map((s) => {
                 const active = globalScreen?.id === s.id
                 return (
-                  <div key={s.id} className={`rounded-xl border relative overflow-hidden bg-card/40 transition hover:border-border ${active ? 'border-primary ring-1 ring-primary/40 shadow-[0_0_0_3px_rgba(99,102,241,0.08)]' : 'border-border/50'}`}>
-                    {active && (
-                      <span className="inline-flex items-center rounded-md bg-primary text-primary-foreground px-2.5 py-0.5 text-xs font-semibold absolute top-3 right-3 z-10 shadow">ATIVO</span>
-                    )}
+                  <div key={s.id} className={`relative overflow-hidden rounded-2xl border bg-[#0c0c14] transition ${active ? 'border-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.15)]' : 'border-white/10 hover:border-white/25'}`}>
+                    {active && <span className="absolute left-3 top-3 z-10 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow">NO AR</span>}
                     <Preview screenId={s.id} fallbackHtml={s.html} title={s.name} />
-                    <div className="p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">{s.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{s.name.split(' â€” ')[0]}</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button onClick={() => setVerHtml(s)} className="inline-flex items-center justify-center h-8 rounded-md border border-input bg-background text-xs shadow-sm hover:bg-accent transition-colors">
-                          <Eye className="h-3.5 w-3.5 mr-1" /> Ver
-                        </button>
-                        <button onClick={() => makeGlobal(s)} className="inline-flex items-center justify-center gap-1.5 h-8 rounded-md bg-primary text-primary-foreground px-3 text-xs font-medium hover:bg-primary/90 shadow">
-                          <Power className="h-3.5 w-3.5 mr-1" /> {active ? 'Ativa' : 'Ativar'}
-                        </button>
-                        <button onClick={async () => { const html = s.html ?? (await fetchHtml(s.id)); setEditingId(s.id); setEditHtml(html || '') }} className="rounded-md border border-input bg-background h-8 text-xs hover:bg-accent transition-colors">
-                          Editar
-                        </button>
-                        <button onClick={() => deleteScreen(s.id)} className="rounded-md bg-destructive/20 text-red-400 h-8 px-3 text-xs font-medium hover:bg-destructive/30 transition-colors">
-                          Excluir
-                        </button>
+                    <div className="p-3">
+                      <p className="mb-2 truncate text-xs font-semibold text-white">{s.name}</p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button onClick={() => setVerHtml(s)} className="flex h-8 items-center justify-center rounded-lg border border-white/10 text-[11px] font-semibold text-zinc-300 hover:bg-white/5">Ver</button>
+                        <button onClick={() => makeGlobal(s)} className={`flex h-8 items-center justify-center rounded-lg text-[11px] font-bold ${active ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-500 text-white hover:bg-emerald-400'}`}>{active ? 'No ar' : 'Ativar'}</button>
+                        <button onClick={async () => { const html = s.html ?? (await fetchHtml(s.id)); setEditingId(s.id); setEditHtml(html || '') }} className="h-8 rounded-lg border border-white/10 text-[11px] font-semibold text-zinc-300 hover:bg-white/5">Editar</button>
+                        <button onClick={() => deleteScreen(s.id)} className="rounded-lg bg-red-500/15 text-[11px] font-semibold text-red-400 hover:bg-red-500/25">Excluir</button>
                       </div>
                     </div>
                   </div>
                 )
               })}
             </div>
-          </section>
-
-          {/* Modal Ver */}
-          {verHtml && (
-            <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4">
-              <div className="rounded-xl border border-border bg-card p-5 w-full max-w-md shadow-2xl">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold">{verHtml.name}</h2>
-                  <button onClick={() => setVerHtml(null)} className="rounded-md p-1.5 hover:bg-accent"><X className="h-4 w-4" /></button>
-                </div>
-                <div className="mx-auto w-[260px]">
-                  <Preview screenId={verHtml.id} fallbackHtml={verHtml.html} title={verHtml.name} />
-                </div>
-                <button onClick={() => { useModel(verHtml); setVerHtml(null) }} className="mt-4 w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow">
-                  Ativar esta tela
-                </button>
-              </div>
-            </div>
           )}
-
-          {/* Dispositivos */}
-          <section>
-            <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Dispositivos ({devices.length})</h2>
-            {devices.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-border/50 p-8 text-center text-sm text-muted-foreground">
-                Nenhum dispositivo conectou ainda. Cole o cÃ³digo mestre no app do celular.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {devices.map((d) => {
-                  const on = Date.now() - new Date(d.last_seen).getTime() < 120000
-                  const scr = screens.find((s) => s.id === d.screen_id)
-                  return (
-                    <div key={d.device_id} className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card/40 p-4 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className={`h-2.5 w-2.5 rounded-full ${on ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
-                        <div>
-                          <p className="font-mono text-sm font-semibold">{d.label || d.device_id}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(d.last_seen).toLocaleString('pt-BR')}
-                            {d.screen_id ? ` Â· ${screens.find((s) => s.id === d.screen_id)?.name || ''}` : ' Â· tela global'}
-                          </p>
-                        </div>
-                      </div>
-                      <select
-                        value={d.screen_id ?? 'global'}
-                        onChange={(e) => {
-                          const v = e.target.value === 'global' ? null : Number(e.target.value)
-                          fetch('/api/screens', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ deviceId: d.device_id, screenId: v, active: true }),
-                          }).then(load)
-                        }}
-                        className="max-w-56 h-8 rounded-md border border-input bg-background px-3 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        <option value="global">Seguir tela global</option>
-                        {screens.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+        </section>
       </main>
 
-      {/* Modal editar */}
+      {/* modal nova tela */}
+      {novaOpen && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/75 p-4" onClick={(e) => { if (e.target === e.currentTarget) setNovaOpen(false) }}>
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0c0c14] p-6 shadow-2xl">
+            <h2 className="mb-4 text-sm font-bold text-white">Nova tela</h2>
+            <input
+              value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nome da tela"
+              className="mb-3 h-10 w-full rounded-xl border border-white/10 bg-black/40 px-3.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60"
+            />
+            <textarea
+              value={newHtml} onChange={(e) => setNewHtml(e.target.value)} rows={8}
+              placeholder="Cole aqui o HTML da tela..."
+              className="mb-4 w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 font-mono text-xs text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60"
+            />
+            <div className="flex gap-2">
+              <button onClick={createScreen} disabled={!newName || !newHtml} className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-2.5 text-sm font-bold text-white disabled:opacity-40 hover:brightness-110">
+                Criar tela
+              </button>
+              <button onClick={() => setNovaOpen(false)} className="rounded-xl border border-white/10 px-5 text-sm font-semibold text-zinc-400 hover:bg-white/5">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* modal ver */}
+      {verHtml && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/75 p-4" onClick={(e) => { if (e.target === e.currentTarget) setVerHtml(null) }}>
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0c14] p-5 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white">{verHtml.name}</h2>
+              <button onClick={() => setVerHtml(null)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mx-auto w-[260px]">
+              <Preview screenId={verHtml.id} fallbackHtml={verHtml.html} title={verHtml.name} />
+            </div>
+            <button onClick={() => { useModel(verHtml); setVerHtml(null) }} className="mt-4 h-10 w-full rounded-xl bg-emerald-500 text-sm font-bold text-white hover:bg-emerald-400">
+              Colocar no ar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* modal editar */}
       {editingId && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-xl border border-border bg-card p-6 shadow">
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/75 p-4" onClick={(e) => { if (e.target === e.currentTarget) setEditingId(null) }}>
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-white/10 bg-[#0c0c14] p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Editar tela</h2>
-              <button onClick={() => setEditingId(null)} className="rounded-md p-1.5 hover:bg-accent"><X className="h-4 w-4" /></button>
+              <h2 className="text-sm font-bold text-white">Editar tela</h2>
+              <button onClick={() => setEditingId(null)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button>
             </div>
             <div className="grid gap-4 md:grid-cols-[1fr_220px]">
               <textarea
                 value={editHtml}
                 onChange={(e) => setEditHtml(e.target.value)}
                 rows={14}
-                className="w-full rounded-md border border-input bg-transparent px-3 py-2.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 font-mono text-xs text-white outline-none focus:border-emerald-500/60"
               />
               <div>
-                <p className="mb-2 text-xs text-muted-foreground">PrÃ©-visualizaÃ§Ã£o</p>
+                <p className="mb-2 text-xs text-zinc-500">Pré-visualização</p>
                 <Preview fallbackHtml={editHtml} />
-                <button onClick={saveEdit} className="mt-3 w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow">
+                <button onClick={saveEdit} className="mt-3 h-10 w-full rounded-xl bg-emerald-500 text-sm font-bold text-white hover:bg-emerald-400">
                   Salvar
                 </button>
               </div>
