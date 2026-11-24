@@ -24,11 +24,21 @@ export async function resolveState(token: string): Promise<{ active: boolean; ve
     }
   }
 
-  // Tela global
-  const { data: globalScreen } = await supabase
+  // Tela global — se o token for bs-<userId>, limita às telas do usuário;
+  // se for device token, cai na global do dono do dispositivo (ou legado sem user_id)
+  let globalQuery = supabase
     .from(SCREENS_TABLE)
     .select('*')
     .eq('is_global', true)
+  if (token.startsWith('bs-')) {
+    const uid = Number(token.slice(3))
+    if (Number.isFinite(uid) && uid > 0) globalQuery = globalQuery.eq('user_id', uid)
+  } else if (device?.user_id) {
+    globalQuery = globalQuery.or(`user_id.eq.${device.user_id},user_id.is.null`)
+  }
+  const { data: globalScreen } = await globalQuery
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (globalScreen && globalScreen.is_active) {

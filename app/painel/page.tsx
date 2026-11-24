@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronRight, Smartphone, MonitorPlay, Shield, Radio,
 } from 'lucide-react'
 
-type Screen = { id: number; name: string; html: string; is_global: boolean; is_active: boolean; updated_at: string }
+type Screen = { id: number; name: string; html: string; is_global: boolean; is_active: boolean; user_id?: number | null; updated_at: string }
 type Device = { device_id: string; screen_id: number | null; screen_active: boolean; label: string | null; last_seen: string }
 type Category = { category: string; count: number }
 
@@ -24,6 +24,9 @@ function Preview({ screenId, fallbackHtml, title = 'preview' }: { screenId?: num
   const [scale, setScale] = useState(0.5)
   const [visible, setVisible] = useState(false)
   const [html, setHtml] = useState<string | undefined>(fallbackHtml)
+
+  // acompanha mudanças do fallback (ex.: preview do construtor enquanto digita)
+  useEffect(() => { setHtml(fallbackHtml) }, [fallbackHtml])
 
   useEffect(() => {
     const el = wrapRef.current
@@ -91,11 +94,10 @@ export default function AdminPanel() {
   const [verHtml, setVerHtml] = useState<Screen | null>(null)
   const [novaOpen, setNovaOpen] = useState(false)
   const [showAllCats, setShowAllCats] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newHtml, setNewHtml] = useState('')
   const perPage = 30
 
   const globalScreen = useMemo(() => screens.find((s) => s.is_global), [screens])
+  const myScreens = useMemo(() => (me ? screens.filter((s) => (s as any).user_id == null || (s as any).user_id === me.id) : screens), [screens, me])
   const masterToken = me ? `bs-${me.id}` : ''
 
   const load = useCallback(async () => {
@@ -195,20 +197,6 @@ export default function AdminPanel() {
       })
     }
     makeGlobal({ ...s, html })
-  }
-
-  const createScreen = async () => {
-    if (!newName || !newHtml) return
-    await fetch('/api/screens', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName, html: newHtml, isGlobal: false }),
-    })
-    setNewName('')
-    setNewHtml('')
-    setNovaOpen(false)
-    load()
-    loadCategories()
   }
 
   const saveEdit = async () => {
@@ -467,14 +455,14 @@ export default function AdminPanel() {
 
         {/* ===== minhas telas ===== */}
         <section className="mt-10">
-          <h2 className="mb-3 text-base font-bold text-white">Minhas telas <span className="text-xs font-medium text-zinc-500">({screens.length})</span></h2>
-          {screens.length === 0 ? (
+          <h2 className="mb-3 text-base font-bold text-white">Minhas telas <span className="text-xs font-medium text-zinc-500">({myScreens.length})</span></h2>
+          {myScreens.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-sm text-zinc-500">
               Você ainda não criou telas. Clique em "+ Nova tela" para começar.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-              {screens.map((s) => {
+              {myScreens.map((s) => {
                 const active = globalScreen?.id === s.id
                 return (
                   <div key={s.id} className={`relative overflow-hidden rounded-2xl border bg-[#0c0c14] transition ${active ? 'border-emerald-500 shadow-[0_0_24px_rgba(16,185,129,0.15)]' : 'border-white/10 hover:border-white/25'}`}>

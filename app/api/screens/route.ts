@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase, SCREENS_TABLE, DEVICES_TABLE } from '@/lib/db'
+import { parseSession } from '@/lib/auth'
+
+async function userIdOf(request: NextRequest): Promise<number | null> {
+  return parseSession(request.cookies.get('telasSession')?.value)
+}
 
 // Lista telas e dispositivos (para o painel).
 // GET ?list=1&cat=&q=&page= — paginação para os 1184 modelos
@@ -25,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
 
     const [{ data: screens, error: e1 }, { data: devices, error: e2 }] = await Promise.all([
-      supabase.from(SCREENS_TABLE).select('id, name, is_global, is_active, updated_at').order('id'),
+      supabase.from(SCREENS_TABLE).select('id, name, is_global, is_active, user_id, updated_at').order('id'),
       supabase.from(DEVICES_TABLE).select('*').order('last_seen', { ascending: false }),
     ])
     if (e1 || e2) throw e1 || e2
@@ -41,10 +46,11 @@ export async function HEAD() {
   return NextResponse.json({})
 }
 
-// Criar tela
+// Criar tela (fica vinculada ao usuário logado)
 export async function POST(request: NextRequest) {
   try {
     const { name, html, isGlobal } = await request.json()
+    const uid = await userIdOf(request)
 
     if (isGlobal) {
       await supabase.from(SCREENS_TABLE).update({ is_global: false }).neq('id', 0)
@@ -52,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await supabase
       .from(SCREENS_TABLE)
-      .insert({ name, html, is_global: !!isGlobal, is_active: true })
+      .insert({ name, html, is_global: !!isGlobal, is_active: true, user_id: uid })
       .select()
       .single()
     if (error) throw error
