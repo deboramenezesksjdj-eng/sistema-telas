@@ -90,6 +90,7 @@ export default function AdminPanel() {
   const [categories, setCategories] = useState<Category[]>([])
   const [verHtml, setVerHtml] = useState<Screen | null>(null)
   const [novaOpen, setNovaOpen] = useState(false)
+  const [showAllCats, setShowAllCats] = useState(false)
   const [newName, setNewName] = useState('')
   const [newHtml, setNewHtml] = useState('')
   const perPage = 30
@@ -300,9 +301,9 @@ export default function AdminPanel() {
           </div>
         </div>
 
-        {/* faixa de categorias (chips roláveis) */}
-        <div className="mx-auto max-w-7xl overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <div className="flex items-center gap-2">
+        {/* faixa de categorias: 3 linhas visíveis + expandir */}
+        <div className="mx-auto max-w-7xl px-4 pb-3">
+          <div className={`flex flex-wrap items-center gap-2 overflow-hidden transition-all ${showAllCats ? 'max-h-[60vh] overflow-y-auto' : 'max-h-[104px]'}`}>
             <button
               onClick={() => { setCat('Todas'); setPage(1) }}
               className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${cat === 'Todas' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/30' : 'border border-white/10 text-zinc-400 hover:border-white/25 hover:text-white'}`}
@@ -319,6 +320,14 @@ export default function AdminPanel() {
               </button>
             ))}
           </div>
+          {categories.length > 8 && (
+            <button
+              onClick={() => setShowAllCats((v) => !v)}
+              className="mt-2 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
+            >
+              {showAllCats ? '− Mostrar menos' : `+ Ver todas as ${categories.length} categorias`}
+            </button>
+          )}
         </div>
       </header>
 
