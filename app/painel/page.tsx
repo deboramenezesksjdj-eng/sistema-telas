@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  Search, Copy, X, Eye, Power, LogOut,
+  Search, Copy, X, Eye, Power, LogOut, Upload,
   ChevronLeft, ChevronRight, Smartphone, MonitorPlay, Shield, Radio,
 } from 'lucide-react'
 
@@ -499,26 +499,7 @@ export default function AdminPanel() {
 
       {/* modal nova tela */}
       {novaOpen && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/75 p-4" onClick={(e) => { if (e.target === e.currentTarget) setNovaOpen(false) }}>
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0c0c14] p-6 shadow-2xl">
-            <h2 className="mb-4 text-sm font-bold text-white">Nova tela</h2>
-            <input
-              value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nome da tela"
-              className="mb-3 h-10 w-full rounded-xl border border-white/10 bg-black/40 px-3.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60"
-            />
-            <textarea
-              value={newHtml} onChange={(e) => setNewHtml(e.target.value)} rows={8}
-              placeholder="Cole aqui o HTML da tela..."
-              className="mb-4 w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 font-mono text-xs text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60"
-            />
-            <div className="flex gap-2">
-              <button onClick={createScreen} disabled={!newName || !newHtml} className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 py-2.5 text-sm font-bold text-white disabled:opacity-40 hover:brightness-110">
-                Criar tela
-              </button>
-              <button onClick={() => setNovaOpen(false)} className="rounded-xl border border-white/10 px-5 text-sm font-semibold text-zinc-400 hover:bg-white/5">Cancelar</button>
-            </div>
-          </div>
-        </div>
+        <NewScreenModal onClose={() => setNovaOpen(false)} onCreated={() => { load(); loadCategories() }} />
       )}
 
       {/* modal ver */}
@@ -565,6 +546,337 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ===== Construtor de tela personalizada =====
+// Gera HTML no mesmo padrão das telas oficiais (Space Grotesk, fundo transparente,
+// animações) com: logo, modo (facial/digital/carregando/erro/aviso) e textos livres.
+type BuilderMode = 'facial' | 'digital' | 'carregando' | 'erro' | 'aviso'
+
+function buildScreenHtml(o: { mode: BuilderMode; logoUrl: string; title: string; subtitle: string; highlight: string; loadingText: string }): string {
+  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const { mode, logoUrl, title, subtitle, highlight, loadingText } = o
+
+  if (mode === 'facial') {
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>${esc(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100%; height: 100%; font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; background: transparent !important; overflow: hidden; user-select: none; -webkit-user-select: none; }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; gap: 40px; }
+        .logo-wrap { position: absolute; top: 40px; left: 0; width: 100%; display: flex; justify-content: center; }
+        .logo { width: 160px; height: auto; filter: drop-shadow(0 2px 10px rgba(0, 180, 216, 0.4)); }
+        .camera-ring { width: min(75vw, 320px); height: min(75vw, 320px); border: 6px solid #ffffff; border-radius: 50%; background: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); animation: aproximarAnel 2.5s infinite ease-in-out; }
+        @keyframes aproximarAnel { 0%, 100% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.08); opacity: 1; border-width: 8px; } }
+        .command-text { font-size: 22px; font-weight: 500; color: #ffffff; text-align: center; letter-spacing: 0.3px; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); }
+    </style>
+</head>
+<body>
+    ${logoUrl ? `<div class="logo-wrap"><img class="logo" src="${esc(logoUrl)}" alt="Logo"></div>` : ''}
+    <div class="camera-ring"></div>
+    <div class="command-text">${esc(title)}</div>
+</body>
+</html>`
+  }
+
+  if (mode === 'digital') {
+    return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>${esc(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100%; height: 100%; font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; background: transparent !important; overflow: hidden; user-select: none; -webkit-user-select: none; }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .header { position: absolute; top: 40px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; z-index: 10; }
+        .logo { width: 160px; height: auto; filter: drop-shadow(0 2px 10px rgba(0, 180, 216, 0.4)); }
+        .header-title { font-size: 14px; font-weight: 600; color: #00b4d8; text-transform: uppercase; letter-spacing: 1.5px; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); }
+        .prompt-container { display: flex; flex-direction: column; align-items: center; gap: 24px; background: transparent; padding: 0 24px; max-width: 380px; text-align: center; margin-top: 60px; animation: slideUp 0.6s ease-out forwards; }
+        .icon-wrapper { display: flex; justify-content: center; align-items: center; width: 64px; height: 64px; background: rgba(0, 180, 216, 0.1); border: 1px solid rgba(0, 180, 216, 0.3); border-radius: 50%; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); }
+        .icon-fingerprint { width: 32px; height: 32px; color: #00b4d8; filter: drop-shadow(0 2px 4px rgba(0, 180, 216, 0.4)); }
+        .prompt-title { font-size: 22px; font-weight: 700; color: #ffffff; letter-spacing: 0.2px; margin-bottom: 12px; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8); }
+        .prompt-text { font-size: 16px; font-weight: 400; color: rgba(255, 255, 255, 0.95); line-height: 1.5; letter-spacing: 0.2px; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); }
+        .highlight { color: #00b4d8; font-weight: 600; text-shadow: 0 2px 8px rgba(0, 180, 216, 0.5), 0 2px 8px rgba(0, 0, 0, 0.8); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        ${logoUrl ? `<img class="logo" src="${esc(logoUrl)}" alt="Logo">` : ''}
+        <div class="header-title">Segurança do Dispositivo</div>
+    </div>
+    <div class="prompt-container">
+        <div class="icon-wrapper">
+            <svg class="icon-fingerprint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12C2 6.48 6.48 2 12 2s10 4.48 10 10"/>
+                <path d="M5 15.5C5 13.57 6.57 12 8.5 12c1.45 0 2.69.88 3.22 2.15"/>
+                <path d="M9 19.5v-1c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v1"/>
+                <path d="M14 12c0-1.1.9-2 2-2s2 .9 2 2v2.5"/>
+                <path d="M12 7.5a4.5 4.5 0 0 0-4.5 4.5v1"/>
+                <path d="M16 19.5v-1.5"/>
+            </svg>
+        </div>
+        <div>
+            <h2 class="prompt-title">${esc(title)}</h2>
+            <p class="prompt-text">${esc(subtitle)}${highlight ? ` <span class="highlight">${esc(highlight)}</span>` : ''}</p>
+        </div>
+    </div>
+</body>
+</html>`
+  }
+
+  // carregando / erro / aviso — card central com logo + ícone + textos
+  let stageInner: string
+  let stageCss: string
+  if (mode === 'carregando') {
+    stageCss = `.security-stage { position: relative; width: 100px; height: 100px; margin-bottom: 24px; display: flex; justify-content: center; align-items: center; border-radius: 50%; }
+        .pulse-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #00b4d8; animation: expandPulse 2s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+        .pulse-ring:nth-child(2) { animation-delay: 1s; }
+        @keyframes expandPulse { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+        .spinner { width: 50px; height: 50px; border: 3px solid rgba(0, 180, 216, 0.2); border-top-color: #00b4d8; border-radius: 50%; animation: spin 1s linear infinite; z-index: 2; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 14px; font-weight: 500; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); display: flex; align-items: center; gap: 6px; }`
+    stageInner = '<div class="pulse-ring"></div><div class="pulse-ring"></div><div class="spinner"></div>'
+  } else if (mode === 'erro') {
+    stageCss = `.security-stage { position: relative; width: 100px; height: 100px; margin-bottom: 24px; display: flex; justify-content: center; align-items: center; border-radius: 50%; animation: shakeError 0.5s cubic-bezier(.36,.07,.19,.97) both; animation-delay: 0.3s; }
+        @keyframes shakeError { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0); } 40%, 60% { transform: translate3d(6px, 0, 0); } }
+        .pulse-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid #ff4d4d; animation: expandPulse 2s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+        .pulse-ring:nth-child(2) { animation-delay: 1s; }
+        @keyframes expandPulse { 0% { transform: scale(0.5); opacity: 1; } 100% { transform: scale(1.6); opacity: 0; } }
+        .shield-icon { width: 50px; height: 50px; color: #ff4d4d; z-index: 2; filter: drop-shadow(0 0 10px rgba(255, 77, 77, 0.8)); }
+        .loading-text { font-size: 14px; font-weight: 500; color: #ff4d4d; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); display: flex; align-items: center; gap: 6px; }`
+    stageInner = `<div class="pulse-ring"></div><div class="pulse-ring"></div>
+            <svg class="shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <line x1="9" y1="9" x2="15" y2="15"/>
+                <line x1="15" y1="9" x2="9" y2="15"/>
+            </svg>`
+  } else {
+    stageCss = `.stage-icon { display: flex; justify-content: center; align-items: center; width: 100px; height: 100px; margin-bottom: 24px; border-radius: 50%; background: rgba(255, 183, 3, 0.08); border: 1px solid rgba(255, 183, 3, 0.3); }
+        .stage-icon svg { width: 48px; height: 48px; color: #ffb703; filter: drop-shadow(0 0 10px rgba(255, 183, 3, 0.5)); }
+        .loading-text { font-size: 14px; font-weight: 500; color: #ffffff; text-transform: uppercase; letter-spacing: 1px; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); display: flex; align-items: center; gap: 6px; }`
+    stageInner = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>
+            </svg>`
+  }
+
+  const loadingBlock = loadingText
+    ? `<div class="loading-text">
+                ${esc(loadingText)}
+                <span class="dots"><span>.</span><span>.</span><span>.</span></span>
+            </div>`
+    : ''
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>${esc(title)}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100%; height: 100%; background: transparent !important; overflow: hidden; font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; user-select: none; -webkit-user-select: none; }
+        body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+        .card { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; text-align: center; background: transparent; border: none; box-shadow: none; animation: slideUpFade 0.8s ease-out forwards; }
+        @keyframes slideUpFade { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        .logo { width: 180px; height: auto; margin-bottom: 40px; filter: drop-shadow(0 4px 15px rgba(0, 180, 216, 0.4)); animation: floatLogo 4s ease-in-out infinite; }
+        @keyframes floatLogo { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        ${stageCss}
+        .title { font-size: 22px; font-weight: 700; color: #ffffff; margin-bottom: 12px; letter-spacing: 0.5px; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8); }
+        .subtitle { font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.9); margin-bottom: 24px; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); }
+        .highlight-text { color: #ffb703; font-weight: 600; text-shadow: 0 2px 10px rgba(255, 183, 3, 0.4), 0 2px 8px rgba(0,0,0,0.8); display: block; margin-top: 10px; }
+        .dots span { animation: loadingDots 1.4s infinite; opacity: 0; }
+        .dots span:nth-child(2) { animation-delay: 0.2s; }
+        .dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes loadingDots { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div class="card">
+        ${logoUrl ? `<img class="logo" src="${esc(logoUrl)}" alt="Logo">` : ''}
+        <div class="${mode === 'aviso' ? 'stage-icon' : 'security-stage'}">${stageInner}</div>
+        <h1 class="title">${esc(title)}</h1>
+        ${subtitle || highlight ? `<p class="subtitle">
+            ${esc(subtitle)}
+            ${highlight ? `<span class="highlight-text">${esc(highlight)}</span>` : ''}
+        </p>` : ''}
+        ${loadingBlock}
+    </div>
+</body>
+</html>`
+}
+
+function NewScreenModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [mode, setMode] = useState<BuilderMode>('facial')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [title, setTitle] = useState('Aproxime o rosto')
+  const [subtitle, setSubtitle] = useState('')
+  const [highlight, setHighlight] = useState('')
+  const [loadingText, setLoadingText] = useState('')
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const modes: { key: BuilderMode; label: string; desc: string }[] = [
+    { key: 'facial', label: 'Facial', desc: 'Anel de câmera — aproxime o rosto' },
+    { key: 'digital', label: 'Digital', desc: 'Sensor biométrico do aparelho' },
+    { key: 'carregando', label: 'Carregando', desc: 'Spinner de processamento' },
+    { key: 'erro', label: 'Erro', desc: 'Alerta de falha em vermelho' },
+    { key: 'aviso', label: 'Aviso', desc: 'Aviso com ícone de atenção' },
+  ]
+
+  const defaultTitles: Record<BuilderMode, string> = {
+    facial: 'Aproxime o rosto',
+    digital: 'Autenticação Exigida',
+    carregando: 'Verificando',
+    erro: 'Falha na Autenticação',
+    aviso: 'Atenção',
+  }
+
+  const pickMode = (m: BuilderMode) => { setMode(m); setTitle(defaultTitles[m]) }
+
+  const uploadFile = (file: File) => {
+    setUploading(true); setErr('')
+    const fd = new FormData()
+    fd.append('file', file)
+    fetch('/api/upload-logo', { method: 'POST', body: fd })
+      .then((r) => r.json())
+      .then((d) => { if (d.url) setLogoUrl(d.url); else setErr(d.error || 'Erro no upload') })
+      .catch(() => setErr('Erro no upload'))
+      .finally(() => setUploading(false))
+  }
+
+  const previewHtml = useMemo(
+    () => buildScreenHtml({ mode, logoUrl, title, subtitle, highlight, loadingText }),
+    [mode, logoUrl, title, subtitle, highlight, loadingText],
+  )
+
+  const save = async () => {
+    if (!name.trim() || saving) return
+    setSaving(true); setErr('')
+    try {
+      const res = await fetch('/api/screens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `Minhas telas — ${name.trim()}`, html: previewHtml, isGlobal: false }),
+      })
+      if (!res.ok) throw new Error()
+      onCreated()
+      onClose()
+    } catch { setErr('Erro ao criar tela') }
+    setSaving(false)
+  }
+
+  const inputCls = 'w-full rounded-xl border border-white/10 bg-black/40 px-3.5 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60'
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/75 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/10 bg-[#0c0c14] p-6 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white">Nova tela personalizada</h2>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-[1fr_200px]">
+          <div className="space-y-4">
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Tipo de tela</label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {modes.map((m) => (
+                  <button key={m.key} onClick={() => pickMode(m.key)}
+                    className={`rounded-xl border p-3 text-left transition ${mode === m.key ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/10 hover:border-white/25'}`}>
+                    <div className={`text-xs font-bold ${mode === m.key ? 'text-emerald-300' : 'text-white'}`}>{m.label}</div>
+                    <div className="mt-0.5 text-[10px] leading-tight text-zinc-500">{m.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-zinc-500">Logo</label>
+              <div className="flex items-center gap-3">
+                {logoUrl ? (
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-dashed border-white/20 text-zinc-600"><Upload className="h-5 w-5" /></div>
+                )}
+                <div>
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20">
+                    <Upload className="h-3.5 w-3.5" /> {uploading ? 'Enviando...' : logoUrl ? 'Trocar logo' : 'Enviar logo'}
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.currentTarget.value = '' }} />
+                  </label>
+                  {logoUrl && <button onClick={() => setLogoUrl('')} className="ml-2 text-[11px] text-zinc-500 hover:text-red-400">remover</button>}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-zinc-400">Texto principal</label>
+                <input value={title} onChange={(e) => setTitle(e.target.value)} className={`h-10 ${inputCls}`} />
+              </div>
+              {mode !== 'facial' && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">Texto de baixo</label>
+                  <textarea value={subtitle} onChange={(e) => setSubtitle(e.target.value)} rows={2}
+                    className={`${inputCls} py-2.5`} />
+                </div>
+              )}
+              {mode !== 'facial' && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">Destaque (opcional, em amarelo)</label>
+                  <input value={highlight} onChange={(e) => setHighlight(e.target.value)} placeholder="Ex.: Refaça o procedimento"
+                    className={`h-10 ${inputCls}`} />
+                </div>
+              )}
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-zinc-400">Linha final animada (opcional)</label>
+                <input value={loadingText} onChange={(e) => setLoadingText(e.target.value)} placeholder="Ex.: Preparando nova tentativa"
+                  className={`h-10 ${inputCls}`} />
+              </div>
+            </div>
+
+            {err && <p className="text-xs text-red-400">{err}</p>}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">Pré-visualização</p>
+            <div className="mx-auto w-[180px] overflow-hidden rounded-2xl border border-white/10" style={{ background: 'linear-gradient(160deg,#1a3a2f,#0c1a2e)' }}>
+              <Preview fallbackHtml={previewHtml} title="preview" />
+            </div>
+            <div className="mt-4">
+              <label className="mb-1.5 block text-xs font-medium text-zinc-400">Nome da tela</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Minha tela" required
+                className={`h-10 ${inputCls}`} />
+            </div>
+            <button onClick={save} disabled={!name.trim() || saving}
+              className="mt-3 h-10 w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-sm font-bold text-white hover:brightness-110 disabled:opacity-40">
+              {saving ? 'Criando...' : 'Criar tela'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
