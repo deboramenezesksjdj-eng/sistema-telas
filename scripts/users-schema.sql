@@ -6,6 +6,8 @@ create table if not exists public.users (
   name text,
   role text not null default 'user',   -- 'admin' | 'user'
   blocked boolean not null default false,
+  session_key text,                      -- sessão única p/ não-admins (admin usa 'all')
+  expires_at timestamptz,                -- data de validade da conta (null = sem validade)
   created_at timestamptz not null default now()
 );
 

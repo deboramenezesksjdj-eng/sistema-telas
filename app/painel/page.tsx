@@ -1,18 +1,17 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { setCookie } from 'nookies'
 import {
   Plus, Search, Copy, X, Eye, Power, Lock, BookOpen, Link2,
   EllipsisVertical, ArrowUpDown, ChevronDown, Layers, Building2,
-  Signal, Landmark, Smartphone, CircleDot, MonitorPlay,
+  Signal, Landmark, Smartphone, CircleDot, MonitorPlay, Smartphone as DeviceIcon,
 } from 'lucide-react'
 
 type Screen = { id: number; name: string; html: string; is_global: boolean; is_active: boolean; updated_at: string }
 type Device = { device_id: string; screen_id: number | null; screen_active: boolean; label: string | null; last_seen: string }
 type Category = { category: string; count: number }
 
-const CAT_COLORS = ['#26d93b', '#6366f1', '#ffffff', '#ff0000', '#2990ff', '#ffa200', '#cc64f2', '#00ff33', '#fff500', '#ff0000']
+const CAT_COLORS = ['#22d3ee', '#6366f1', '#ffffff', '#f43f5e', '#2990ff', '#f59e0b', '#a78bfa', '#10b981', '#eab308', '#ec4899']
 
 function dotColor(name: string) {
   let h = 0
@@ -26,7 +25,7 @@ function catIcon(name: string) {
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 17 + name.charCodeAt(i)) >>> 0
   const Icon = CAT_ICONS[h % CAT_ICONS.length]
-  const tints = ['153,70,236', '245,158,11', '16,185,129', '59,130,246', '85,247,190']
+  const tints = ['34,211,238', '99,102,241', '16,185,129', '245,158,11', '244,63,94']
   return { Icon, bg: `rgba(${tints[h % tints.length]},0.145)`, color: tints[h % tints.length] }
 }
 
@@ -96,9 +95,8 @@ export default function AdminPanel() {
   const [cat, setCat] = useState<string | null>(null) // null = nenhuma engenharia selecionada
   const [search, setSearch] = useState('')
   const [copied, setCopied] = useState(false)
-  const [pwd, setPwd] = useState('')
-  const [error, setError] = useState('')
-  const [loggedIn, setLoggedIn] = useState(false)
+  const [me, setMe] = useState<{ email: string; name: string | null; role: string } | null>(null)
+  const [checking, setChecking] = useState(true)
   const [models, setModels] = useState<Screen[]>([])
   const [modelTotal, setModelTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -139,6 +137,20 @@ export default function AdminPanel() {
     } catch {}
   }, [])
 
+  // Sessão via cookie telasSession (/login). Admin e usuário logado acessam.
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.user) setMe(d.user)
+        else window.location.href = '/login'
+      })
+      .catch(() => { window.location.href = '/login' })
+      .finally(() => setChecking(false))
+  }, [])
+
+  const loggedIn = !!me
+
   useEffect(() => {
     if (!loggedIn) return
     load()
@@ -152,21 +164,6 @@ export default function AdminPanel() {
     const t = setTimeout(() => loadModels(cat, search, page), 250)
     return () => clearTimeout(t)
   }, [loggedIn, cat, search, page, loadModels])
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const res = await fetch('/api/admin-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pwd }),
-    })
-    if ((await res.json()).success) {
-      setCookie(null, 'telasLoggedIn', 'true', { maxAge: 30 * 24 * 60 * 60, sameSite: true, path: '/' })
-      setLoggedIn(true)
-    } else {
-      setError('Senha incorreta!')
-    }
-  }
 
   const makeGlobal = async (s: Screen) => {
     await fetch('/api/screens', {
@@ -199,7 +196,7 @@ export default function AdminPanel() {
   const useModel = async (s: Screen) => {
     let html = s.html ?? (await fetchHtml(s.id))
     if (!html) return
-    // Substitui o placeholder de duração antes de ativar (telas com timer configurável)
+    // Substitui o placeholder de duraÃ§Ã£o antes de ativar (telas com timer configurÃ¡vel)
     if (html.includes('__DURACAO__')) {
       html = html.replaceAll('__DURACAO__', String(duration))
       await fetch('/api/screens', {
@@ -248,35 +245,25 @@ export default function AdminPanel() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const logout = async () => {
+    await fetch('/api/auth/me', { method: 'DELETE' })
+    window.location.href = '/login'
+  }
+
   const totalPages = Math.max(1, Math.ceil(modelTotal / perPage))
   const selCat = categories.find((c) => c.category === cat)
 
-  if (!loggedIn) {
+  if (checking) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="w-full max-w-sm rounded-xl border border-border bg-card p-8 shadow">
-          <h1 className="text-xl font-bold mb-1 text-center">Block Screen</h1>
-          <p className="mb-6 text-center text-xs text-muted-foreground">Controle remoto de telas Android</p>
-          {error && <p className="mb-4 rounded-md bg-destructive/10 p-3 text-center text-sm text-red-400">{error}</p>}
-          <input
-            type="password"
-            autoFocus
-            value={pwd}
-            onChange={(e) => setPwd(e.target.value)}
-            placeholder="Senha de acesso"
-            className="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 mb-4 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          />
-          <button type="submit" className="w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow">
-            Entrar
-          </button>
-        </form>
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-foreground" />
       </div>
     )
   }
 
   return (
     <div className="min-h-screen flex bg-background text-foreground">
-      {/* ============ SIDEBAR (igual Joystick) ============ */}
+      {/* ============ SIDEBAR ============ */}
       <aside className="w-72 shrink-0 border-r border-border/50 bg-card/30 hidden lg:flex flex-col sticky top-0 h-screen overflow-y-auto">
         {/* Logo */}
         <div className="p-4 flex items-center justify-center border-b border-border/50">
@@ -284,25 +271,31 @@ export default function AdminPanel() {
             <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center drop-shadow-[0_0_20px_rgba(168,85,247,0.35)]">
               <MonitorPlay className="h-5 w-5 text-primary" />
             </div>
-            <span className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-fuchsia-400 to-violet-400 bg-clip-text text-transparent">BLOCK SCREEN</span>
+            <span className="text-lg font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">BLOCK SCREEN</span>
           </div>
         </div>
 
-        {/* PENA ativa (dispositivo) */}
+        {/* UsuÃ¡rio logado + sair */}
         <div className="p-3 pb-0 space-y-2">
-          <button className="inline-flex items-center justify-center gap-2 h-8 rounded-md px-3 text-xs w-full border border-blue-500/50 text-blue-300 hover:bg-blue-500/10 hover:text-blue-200 bg-background shadow-sm transition-colors">
-            <Link2 className="h-3.5 w-3.5 mr-1.5" />
-            {devices.length ? `${devices.length} DISPOSITIVO(S)` : 'PLAYFAKE'}
-          </button>
-        </div>
-        <div className="p-3 pb-1">
-          <button className="inline-flex items-center justify-center gap-2 h-8 rounded-md px-3 text-xs w-full bg-emerald-600 hover:bg-emerald-500 text-white shadow transition-colors">
-            <Plus className="h-4 w-4 mr-1" /> PENA
+          <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 shadow-sm">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+              {(me?.name || me?.email || '?').slice(0, 1).toUpperCase()}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-semibold">{me?.name || 'UsuÃ¡rio'}</div>
+              <div className="truncate text-[10px] text-muted-foreground">{me?.email}</div>
+            </div>
+            {me?.role === 'admin' && (
+              <a href="/admin" className="shrink-0 rounded-md border border-primary/40 px-2 py-1 text-[10px] font-bold text-primary hover:bg-primary/10">ADMIN</a>
+            )}
+          </div>
+          <button onClick={logout} className="inline-flex items-center justify-center gap-2 h-8 rounded-md px-3 text-xs w-full border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+            Sair da conta
           </button>
         </div>
 
-        {/* Penas */}
-        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Penas</div>
+        {/* Dispositivos conectados */}
+        <div className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-300/80">Dispositivos ({devices.length})</div>
         <div className="px-2 space-y-1 max-h-[40vh] overflow-y-auto">
           {devices.length === 0 ? (
             <div className="px-2.5 py-2 text-xs text-muted-foreground italic">Nenhum dispositivo conectado ainda.</div>
@@ -310,36 +303,33 @@ export default function AdminPanel() {
             devices.map((d) => {
               const on = Date.now() - new Date(d.last_seen).getTime() < 120000
               return (
-                <div key={d.device_id} className="group flex items-center gap-2 rounded-md px-2.5 py-2 cursor-pointer text-sm bg-emerald-500/15 text-foreground ring-1 ring-emerald-500/30">
-                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${on ? 'bg-emerald-500' : 'bg-muted-foreground'}`} />
+                <div key={d.device_id} className="group flex items-center gap-2 rounded-md px-2.5 py-2 cursor-pointer text-sm bg-cyan-500/10 text-foreground ring-1 ring-cyan-500/30">
+                  <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${on ? 'bg-cyan-400' : 'bg-muted-foreground'}`} />
                   <span className="flex-1 truncate">{d.label || d.device_id}</span>
                   <Link2 className="h-3 w-3 opacity-60" />
-                  {on && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                  <button className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-background" type="button">
-                    <EllipsisVertical className="h-3.5 w-3.5" />
-                  </button>
+                  {on && <span className="h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />}
                 </div>
               )
             })
           )}
         </div>
 
-        {/* Categorias de Engenharias */}
+        {/* Categorias */}
         <div className="p-3 pt-4 border-t border-border/50 mt-2 space-y-2">
-          <div className="px-3 pt-2 pb-1 -mx-3 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300/80">Categorias de Engenharias</div>
+          <div className="px-3 pt-2 pb-1 -mx-3 text-[10px] font-semibold uppercase tracking-wider text-cyan-300/80">Categorias</div>
           <nav className="space-y-1.5">
-            <div className="rounded-lg border border-fuchsia-400/30 bg-gradient-to-br from-fuchsia-500/10 to-transparent overflow-hidden">
-              <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-fuchsia-400/20">
-                <Eye className="h-3.5 w-3.5 text-fuchsia-300" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-fuchsia-200/90 flex-1">Telas ON</span>
-                <span className="text-[10px] tabular-nums text-fuchsia-200/70 bg-fuchsia-400/15 rounded-full px-1.5 py-0.5">{globalScreen?.is_active ? 1 : 0}</span>
+            <div className="rounded-lg border border-cyan-400/30 bg-gradient-to-br from-cyan-500/10 to-transparent overflow-hidden">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-cyan-400/20">
+                <Eye className="h-3.5 w-3.5 text-cyan-300" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-cyan-200/90 flex-1">Telas ON</span>
+                <span className="text-[10px] tabular-nums text-cyan-200/70 bg-cyan-400/15 rounded-full px-1.5 py-0.5">{globalScreen?.is_active ? 1 : 0}</span>
               </div>
               <div className="px-1.5 py-1 space-y-0.5 max-h-56 overflow-y-auto">
                 {globalScreen ? (
-                  <div className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer text-sm ${globalScreen.is_active ? 'bg-fuchsia-500/20 text-foreground ring-1 ring-fuchsia-400/40' : 'hover:bg-fuchsia-400/10 text-fuchsia-100/90'}`}>
-                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: dotColor(globalScreen.name.split(' — ')[0]) }} />
+                  <div className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer text-sm ${globalScreen.is_active ? 'bg-cyan-500/20 text-foreground ring-1 ring-cyan-400/40' : 'hover:bg-cyan-400/10 text-cyan-100/90'}`}>
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: dotColor(globalScreen.name.split(' â€” ')[0]) }} />
                     <span className="flex-1 truncate">{globalScreen.name}</span>
-                    <span className="text-[10px] tabular-nums text-fuchsia-200/80 bg-fuchsia-400/15 rounded-full px-1.5 py-0.5 shrink-0">global</span>
+                    <span className="text-[10px] tabular-nums text-cyan-200/80 bg-cyan-400/15 rounded-full px-1.5 py-0.5 shrink-0">global</span>
                   </div>
                 ) : (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground italic">Nenhuma tela ativa</div>
@@ -356,7 +346,7 @@ export default function AdminPanel() {
                 <button
                   key={c.category}
                   onClick={() => { setCat(active ? null : c.category); setPage(1) }}
-                  className={`min-w-0 w-full flex flex-col gap-0.5 px-2.5 py-2 rounded-lg overflow-hidden border bg-gradient-to-br from-card/40 to-transparent transition-colors ${active ? 'border-fuchsia-400/60 ring-1 ring-fuchsia-400/40 bg-fuchsia-500/10' : 'border-border/40 hover:bg-fuchsia-500/5'}`}
+                  className={`min-w-0 w-full flex flex-col gap-0.5 px-2.5 py-2 rounded-lg overflow-hidden border bg-gradient-to-br from-card/40 to-transparent transition-colors ${active ? 'border-cyan-400/60 ring-1 ring-cyan-400/40 bg-cyan-500/10' : 'border-border/40 hover:bg-cyan-500/5'}`}
                 >
                   <div className="grid min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                     <div className="flex min-w-0 items-center gap-2">
@@ -383,12 +373,12 @@ export default function AdminPanel() {
           {/* Bloco tutorial */}
           <div className="rounded-xl border border-primary/40 bg-primary/5 p-5 relative">
             <h2 className="font-semibold flex items-center gap-2 mb-2">
-              <BookOpen className="h-4 w-4 text-primary" /> Seu espaço pessoal
+              <BookOpen className="h-4 w-4 text-primary" /> Seu espaÃ§o pessoal
             </h2>
             <p className="text-sm text-muted-foreground whitespace-pre-line">
-              {`As categorias e engenharias oficiais são só para uso.
+              {`As categorias e engenharias oficiais sÃ£o sÃ³ para uso.
 
-Crie suas próprias telas dentro de "Minhas telas".
+Crie suas prÃ³prias telas dentro de "Minhas telas".
 
 Aproveite!`}
             </p>
@@ -401,15 +391,15 @@ Aproveite!`}
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Block Screen</h1>
-              <p className="text-sm text-muted-foreground">Catálogo de telas. Selecione uma categoria na lateral e ative o preset desejado de qualquer engenharia.</p>
+              <p className="text-sm text-muted-foreground">CatÃ¡logo de telas. Selecione uma categoria na lateral e ative o preset desejado de qualquer engenharia.</p>
             </div>
           </div>
 
-          {/* Código mestre */}
+          {/* CÃ³digo mestre */}
           <div data-tour="master-code" className="rounded-xl border border-border/50 bg-gradient-to-br from-card to-card/40 p-4 shadow">
             <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">Código mestre</span>
+                <span className="text-xs uppercase tracking-wider text-muted-foreground">CÃ³digo mestre</span>
                 <span className="inline-flex items-center rounded-md border border-border px-2.5 py-0.5 text-xs font-medium">PAINEL</span>
               </div>
               <div className="flex items-center gap-2">
@@ -430,7 +420,7 @@ Aproveite!`}
                 <Copy className="h-4 w-4 mr-1.5" /> {copied ? 'Copiado!' : 'Copiar'}
               </button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">Cole este script uma única vez no site/app. Ele atualiza a tela em tempo real conforme você ativa/desativa um preset de qualquer engenharia.</p>
+            <p className="text-xs text-muted-foreground mt-2">Cole este script uma Ãºnica vez no site/app. Ele atualiza a tela em tempo real conforme vocÃª ativa/desativa um preset de qualquer engenharia.</p>
           </div>
 
           {/* Busca + Nova tela */}
@@ -441,7 +431,7 @@ Aproveite!`}
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring pl-9"
-                placeholder="Buscar telas por nome ou descrição…"
+                placeholder="Buscar telas por nome ou descriÃ§Ã£oâ€¦"
               />
             </div>
             <button
@@ -459,13 +449,13 @@ Aproveite!`}
             </button>
           </div>
 
-          {/* Contagem + slider duração */}
+          {/* Contagem + slider duraÃ§Ã£o */}
           <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap">
             <span>
               <span className="font-semibold text-foreground">{modelTotal}</span> telas em <span className="text-foreground">{cat || 'todas as categorias'}</span>
             </span>
             <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1 text-xs">
-              Duração do timer (Android):
+              DuraÃ§Ã£o do timer (Android):
               <b className="text-primary">{Math.floor(duration / 60)}min {duration % 60 ? `${duration % 60}s` : ''}</b>
               <input type="range" min={30} max={1800} step={30} value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="w-32 h-1 accent-[var(--primary)]" />
             </span>
@@ -474,8 +464,8 @@ Aproveite!`}
           {/* Grid de presets */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
             {models.map((m) => {
-              const catName = m.name.split(' — ')[0]
-              const shortName = m.name.split(' — ').slice(1).join(' — ') || m.name
+              const catName = m.name.split(' â€” ')[0]
+              const shortName = m.name.split(' â€” ').slice(1).join(' â€” ') || m.name
               const active = globalScreen?.id === m.id
               return (
                 <div
@@ -507,17 +497,17 @@ Aproveite!`}
             })}
           </div>
 
-          {/* Paginação */}
+          {/* PaginaÃ§Ã£o */}
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-3">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="h-8 rounded-md border border-input bg-background px-3 text-xs disabled:opacity-30 hover:bg-accent">
                 Anterior
               </button>
               <span className="text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">{page}</span> / {totalPages} · {modelTotal} telas
+                <span className="font-semibold text-foreground">{page}</span> / {totalPages} Â· {modelTotal} telas
               </span>
               <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="rounded-md border border-input px-3 py-1.5 text-xs disabled:opacity-30 hover:bg-accent">
-                Próxima
+                PrÃ³xima
               </button>
             </div>
           )}
@@ -538,7 +528,7 @@ Aproveite!`}
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{s.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{s.name.split(' — ')[0]}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.name.split(' â€” ')[0]}</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -585,7 +575,7 @@ Aproveite!`}
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Dispositivos ({devices.length})</h2>
             {devices.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border/50 p-8 text-center text-sm text-muted-foreground">
-                Nenhum dispositivo conectou ainda. Cole o código mestre no app do celular.
+                Nenhum dispositivo conectou ainda. Cole o cÃ³digo mestre no app do celular.
               </p>
             ) : (
               <div className="space-y-3">
@@ -600,7 +590,7 @@ Aproveite!`}
                           <p className="font-mono text-sm font-semibold">{d.label || d.device_id}</p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(d.last_seen).toLocaleString('pt-BR')}
-                            {d.screen_id ? ` · ${screens.find((s) => s.id === d.screen_id)?.name || ''}` : ' · tela global'}
+                            {d.screen_id ? ` Â· ${screens.find((s) => s.id === d.screen_id)?.name || ''}` : ' Â· tela global'}
                           </p>
                         </div>
                       </div>
@@ -646,7 +636,7 @@ Aproveite!`}
                 className="w-full rounded-md border border-input bg-transparent px-3 py-2.5 font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <div>
-                <p className="mb-2 text-xs text-muted-foreground">Pré-visualização</p>
+                <p className="mb-2 text-xs text-muted-foreground">PrÃ©-visualizaÃ§Ã£o</p>
                 <Preview fallbackHtml={editHtml} />
                 <button onClick={saveEdit} className="mt-3 w-full h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shadow">
                   Salvar

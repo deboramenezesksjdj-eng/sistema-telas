@@ -1,0 +1,8 @@
+﻿Sessoes, validade de usuarios e visual proprio
+
+- Admin: multiplas sessoes simultaneas; usuario comum: 1 sessao so (novo login derruba o antigo)
+- Usuarios com data de validade definida pelo admin (expires_at); conta expirada nao entra
+- So o admin cria usuarios (cadastro publico removido)
+- /admin com visual proprio (Central Admin, cards, validade editavel, trocar senha, bloquear, excluir)
+- Painel gated pela sessao nova, botao Sair funcional, tema cyan/indigo (sem cara Joystick)
+- Landing e login sem link de cadastro publico

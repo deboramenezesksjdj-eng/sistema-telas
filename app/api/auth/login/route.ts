@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { findUserByEmail, verifyPassword, signSession } from '@/lib/auth'
+import { findUserByEmail, verifyPassword, signSession, newSessionKey, isExpired } from '@/lib/auth'
+import { supabase, USERS_TABLE } from '@/lib/db'
 
 // POST /api/auth/login — { email, password }
 export async function POST(request: NextRequest) {
@@ -14,9 +15,16 @@ export async function POST(request: NextRequest) {
     if (user.blocked) {
       return NextResponse.json({ error: 'Conta bloqueada. Fale com o administrador.' }, { status: 403 })
     }
+    if (isExpired(user)) {
+      return NextResponse.json({ error: 'Sua conta expirou. Fale com o administrador.' }, { status: 403 })
+    }
+
+    // Admin: várias sessões ao mesmo tempo. Usuário comum: 1 só — key nova invalida a anterior.
+    const sessionKey = newSessionKey(user.role, user.session_key ?? null)
+    await supabase.from(USERS_TABLE).update({ session_key: sessionKey }).eq('id', user.id)
 
     const res = NextResponse.json({ success: true, role: user.role, name: user.name })
-    res.cookies.set('telasSession', signSession(user.id), {
+    res.cookies.set('telasSession', signSession(user.id, user.role, sessionKey), {
       httpOnly: true,
       sameSite: 'lax',
       path: '/',

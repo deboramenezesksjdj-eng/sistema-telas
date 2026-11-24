@@ -14,16 +14,21 @@ export default function LoginPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pwd }),
-    })
-    const data = await res.json()
-    if (data.success) {
-      window.location.href = data.role === 'admin' ? '/admin' : '/painel'
-    } else {
-      setError(data.error || 'Falha no login')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pwd }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        window.location.href = data.role === 'admin' ? '/admin' : '/painel'
+      } else {
+        setError(data.error || 'Falha no login')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -55,12 +60,11 @@ export default function LoginPage() {
             placeholder="••••••••"
             className="mb-4 h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <button type="submit" className="flex h-10 w-full items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 transition-colors">
-            Entrar <ArrowRight className="ml-2 h-4 w-4" />
+          <button type="submit" disabled={loading} className="flex h-10 w-full items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground shadow hover:bg-primary/90 transition-colors">
+            {loading ? 'Entrando...' : <>Entrar <ArrowRight className="ml-2 h-4 w-4" /></>}
           </button>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Não tem conta?{' '}
-            <Link href="/cadastro" className="font-semibold text-primary hover:underline">Cadastre-se</Link>
+            Sem conta? Fale com o administrador.
           </p>
         </form>
         <p className="mt-4 text-center text-xs text-muted-foreground">
