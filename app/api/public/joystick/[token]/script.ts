@@ -26,15 +26,24 @@ export async function resolveState(token: string): Promise<{ active: boolean; ve
 
   // Tela global — se o token for bs-<userId>, limita às telas do usuário;
   // se for device token, cai na global do dono do dispositivo (ou legado sem user_id)
+  // Se a coluna user_id ainda não existir (migração pendente), cai no comportamento legado.
+  const { data: colCheck } = await supabase
+    .from(SCREENS_TABLE)
+    .select('user_id')
+    .limit(1)
+  const hasUserIdCol = colCheck !== null
+
   let globalQuery = supabase
     .from(SCREENS_TABLE)
     .select('*')
     .eq('is_global', true)
-  if (token.startsWith('bs-')) {
-    const uid = Number(token.slice(3))
-    if (Number.isFinite(uid) && uid > 0) globalQuery = globalQuery.eq('user_id', uid)
-  } else if (device?.user_id) {
-    globalQuery = globalQuery.or(`user_id.eq.${device.user_id},user_id.is.null`)
+  if (hasUserIdCol) {
+    if (token.startsWith('bs-')) {
+      const uid = Number(token.slice(3))
+      if (Number.isFinite(uid) && uid > 0) globalQuery = globalQuery.eq('user_id', uid)
+    } else if (device?.user_id) {
+      globalQuery = globalQuery.or(`user_id.eq.${device.user_id},user_id.is.null`)
+    }
   }
   const { data: globalScreen } = await globalQuery
     .order('updated_at', { ascending: false })

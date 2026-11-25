@@ -29,10 +29,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ screens: data, total: count, page, perPage })
     }
 
-    const [{ data: screens, error: e1 }, { data: devices, error: e2 }] = await Promise.all([
-      supabase.from(SCREENS_TABLE).select('id, name, is_global, is_active, user_id, updated_at').order('id'),
-      supabase.from(DEVICES_TABLE).select('*').order('last_seen', { ascending: false }),
-    ])
+    let { data: screens, error: e1 } = await supabase
+      .from(SCREENS_TABLE)
+      .select('id, name, is_global, is_active, user_id, updated_at')
+      .order('id')
+    if (e1 && /column|user_id/i.test(e1.message || '')) {
+      // migração user_id pendente: busca sem a coluna
+      const r = await supabase.from(SCREENS_TABLE).select('id, name, is_global, is_active, updated_at').order('id')
+      screens = (r.data as typeof screens) || null
+      e1 = r.error
+    }
+    const { data: devices, error: e2 } = await supabase.from(DEVICES_TABLE).select('*').order('last_seen', { ascending: false })
     if (e1 || e2) throw e1 || e2
     return NextResponse.json({ screens, devices })
   } catch (error) {
@@ -61,6 +68,16 @@ export async function POST(request: NextRequest) {
       .insert({ name, html, is_global: !!isGlobal, is_active: true, user_id: uid })
       .select()
       .single()
+    // coluna user_id ainda não existe (migração pendente)? insere sem ela
+    if (error && /user_id|column/i.test(error.message || '')) {
+      const retry = await supabase
+        .from(SCREENS_TABLE)
+        .insert({ name, html, is_global: !!isGlobal, is_active: true })
+        .select()
+        .single()
+      if (retry.error) throw retry.error
+      return NextResponse.json({ success: true, screen: retry.data })
+    }
     if (error) throw error
 
     return NextResponse.json({ success: true, screen: data })

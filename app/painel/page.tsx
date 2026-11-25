@@ -93,7 +93,6 @@ export default function AdminPanel() {
   const [categories, setCategories] = useState<Category[]>([])
   const [verHtml, setVerHtml] = useState<Screen | null>(null)
   const [novaOpen, setNovaOpen] = useState(false)
-  const [showAllCats, setShowAllCats] = useState(false)
   const perPage = 30
 
   const globalScreen = useMemo(() => screens.find((s) => s.is_global), [screens])
@@ -243,22 +242,91 @@ export default function AdminPanel() {
   const masterCode = `<script src="${typeof window !== 'undefined' ? location.origin : ''}/api/public/joystick/${masterToken}.js" async></script>`
 
   return (
-    <div className="min-h-screen bg-[#08080d] text-zinc-100">
-      {/* ===== BARRA SUPERIOR (layout próprio, sem sidebar) ===== */}
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-[#08080d]/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-600/25">
-              <MonitorPlay className="h-4 w-4 text-white" />
-            </div>
-            <div className="leading-tight">
-              <div className="text-sm font-extrabold tracking-tight text-white">BLOCK SCREEN</div>
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500">controle de telas</div>
+    <div className="flex min-h-screen bg-[#08080d] text-zinc-100">
+      {/* ===== MENU LATERAL ===== */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-white/10 bg-[#0a0a12] lg:flex">
+        <div className="flex items-center gap-2.5 border-b border-white/10 px-5 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-600/25">
+            <MonitorPlay className="h-4 w-4 text-white" />
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-extrabold tracking-tight text-white">BLOCK SCREEN</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500">controle de telas</div>
+          </div>
+        </div>
+
+        {/* busca */}
+        <div className="px-4 pt-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+              className="h-9 w-full rounded-xl border border-white/10 bg-black/40 pl-9 pr-3 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-emerald-500/60"
+              placeholder="Buscar tela..."
+            />
+          </div>
+        </div>
+
+        {/* categorias */}
+        <nav className="mt-4 flex-1 overflow-y-auto px-3 pb-4">
+          <div className="mb-2 px-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">Categorias</div>
+          <button
+            onClick={() => { setCat('Todas'); setPage(1) }}
+            className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${cat === 'Todas' ? 'bg-emerald-500/15 font-bold text-emerald-300' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}
+          >
+            Todas as telas
+            <span className="text-[10px] opacity-60">{modelTotal}</span>
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.category}
+              onClick={() => { setCat(c.category); setPage(1) }}
+              className={`mb-1 flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition ${cat === c.category ? 'bg-emerald-500/15 font-bold text-emerald-300' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              <span className="truncate">{c.category}</span>
+              <span className="ml-2 shrink-0 text-[10px] opacity-60">{c.count}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* rodapé da sidebar: dispositivos + usuário */}
+        <div className="border-t border-white/10 px-4 py-3">
+          <div className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400">
+            <Smartphone className="h-3.5 w-3.5 text-emerald-400" />
+            {devices.filter((d) => Date.now() - new Date(d.last_seen).getTime() < 120000).length} online
+            <span className="text-zinc-600">/ {devices.length}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs text-zinc-400">{me?.name || me?.email}</span>
+            <div className="flex items-center gap-1.5">
+              {me?.role === 'admin' && (
+                <a href="/admin" title="Admin" className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-500/40 text-violet-300 hover:bg-violet-500/10">
+                  <Shield className="h-3.5 w-3.5" />
+                </a>
+              )}
+              <button onClick={logout} title="Sair" className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white">
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
+        </div>
+      </aside>
 
-          {/* busca no topo */}
-          <div className="relative ml-auto hidden w-72 md:block">
+      <div className="min-w-0 flex-1">
+      {/* ===== BARRA SUPERIOR ===== */}
+      <header className="sticky top-0 z-20 border-b border-white/10 bg-[#08080d]/95 backdrop-blur">
+        <div className="flex h-16 items-center gap-4 px-4">
+          {/* logo só no mobile (sidebar esconde) */}
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600">
+              <MonitorPlay className="h-4 w-4 text-white" />
+            </div>
+            <div className="text-sm font-extrabold tracking-tight text-white">BLOCK SCREEN</div>
+          </div>
+
+          {/* busca no topo (mobile) */}
+          <div className="relative ml-auto w-56 lg:hidden">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               value={search}
@@ -268,17 +336,16 @@ export default function AdminPanel() {
             />
           </div>
 
-          {/* dispositivos */}
-          <div className="hidden items-center gap-1.5 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-400 sm:flex">
+          {/* dispositivos online (desktop fica na sidebar) */}
+          <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-zinc-400 sm:hidden">
             <Smartphone className="h-3.5 w-3.5 text-emerald-400" />
             {devices.filter((d) => Date.now() - new Date(d.last_seen).getTime() < 120000).length} online
-            <span className="text-zinc-600">/ {devices.length}</span>
           </div>
 
           {/* usuário */}
           <div className="flex items-center gap-2">
             {me?.role === 'admin' && (
-              <a href="/admin" className="hidden items-center gap-1.5 rounded-xl border border-violet-500/40 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/10 sm:flex">
+              <a href="/admin" className="flex items-center gap-1.5 rounded-xl border border-violet-500/40 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/10 sm:hidden">
                 <Shield className="h-3.5 w-3.5" /> Admin
               </a>
             )}
@@ -288,38 +355,9 @@ export default function AdminPanel() {
             </button>
           </div>
         </div>
-
-        {/* faixa de categorias: 3 linhas visíveis + expandir */}
-        <div className="mx-auto max-w-7xl px-4 pb-3">
-          <div className={`flex flex-wrap items-center gap-2 overflow-hidden transition-all ${showAllCats ? 'max-h-[60vh] overflow-y-auto' : 'max-h-[104px]'}`}>
-            <button
-              onClick={() => { setCat('Todas'); setPage(1) }}
-              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${cat === 'Todas' ? 'bg-emerald-500 text-white shadow shadow-emerald-500/30' : 'border border-white/10 text-zinc-400 hover:border-white/25 hover:text-white'}`}
-            >
-              Todas
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.category}
-                onClick={() => { setCat(c.category); setPage(1) }}
-                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${cat === c.category ? 'bg-emerald-500 text-white shadow shadow-emerald-500/30' : 'border border-white/10 text-zinc-400 hover:border-white/25 hover:text-white'}`}
-              >
-                {c.category} <span className="opacity-60">{c.count}</span>
-              </button>
-            ))}
-          </div>
-          {categories.length > 8 && (
-            <button
-              onClick={() => setShowAllCats((v) => !v)}
-              className="mt-2 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
-            >
-              {showAllCats ? '− Mostrar menos' : `+ Ver todas as ${categories.length} categorias`}
-            </button>
-          )}
-        </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-20 pt-6">
+      <main className="px-4 pb-20 pt-6 lg:px-8">
         {/* ===== linha de status ===== */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-[#0e1512] to-[#0a0d14] p-5">
           <div className="flex items-center gap-4">
@@ -484,6 +522,7 @@ export default function AdminPanel() {
           )}
         </section>
       </main>
+      </div>
 
       {/* modal nova tela */}
       {novaOpen && (
